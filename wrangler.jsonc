@@ -1,0 +1,8 @@
+{
+  "name": "still-frost-e9fdfb-lark-v2",
+  "main": "src/index.js",
+  "compatibility_date": "2026-05-29",
+  "observability": {
+    "enabled": true
+  }
+}
