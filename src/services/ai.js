@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { buildAnalyzePrompt } from "../prompts/analyze.prompt"
 
 export async function analyzeMessage(env, message) {
   console.log("AI START")
@@ -9,28 +10,8 @@ export async function analyzeMessage(env, message) {
     model: "gemini-2.5-flash"
   })
 
-  const prompt = `
-คุณคือ AI CRM วิเคราะห์ลูกค้า Facebook Messenger
-
-วิเคราะห์ข้อความ:
-
-"${message}"
-
-ตอบ JSON เท่านั้น
-
-ห้ามใส่ markdown
-ห้ามใส่ \`\`\`json
-ห้ามอธิบายเพิ่มเติม
-
-{
-  "intent": "",
-  "interest_level": "",
-  "customer_stage": "",
-  "hot_lead": false,
-  "closed_sale": false,
-  "summary": ""
-}
-`
+  const prompt = buildAnalyzePrompt(message)
+  
   const result = await model.generateContent(prompt)
 
   const raw = result.response.text()

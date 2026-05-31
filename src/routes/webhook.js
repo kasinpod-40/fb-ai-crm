@@ -1,5 +1,4 @@
-import { saveMessage } from "../services/lark";
-import { analyzeMessage } from "../services/ai"
+import { processLead } from "../services/lead.service"
 
 export async function handleWebhook(request, env) {
   try {
@@ -31,27 +30,7 @@ export async function handleWebhook(request, env) {
 
         console.log("MESSAGE:", text)
 
-        try {
-          const ai = await analyzeMessage(env, text)
-
-          console.log("AI RESULT:", ai)
-
-          await saveMessage(env, {
-            sender_id: senderId,
-            message: text,
-            page_id: pageId,
-            intent: ai.intent,
-            interest_level: ai.interest_level,
-            customer_stage: ai.customer_stage,
-            hot_lead: ai.hot_lead,
-            closed_sale: ai.closed_sale,
-            ai_summary: ai.summary,
-            timestamp: timestamp,
-            created_at: new Date().toISOString()
-          })
-        } catch (err) {
-          console.log("AI ERROR:", err)
-        }
+        await processLead(env, senderId, pageId, text, timestamp)
       }
     }
 

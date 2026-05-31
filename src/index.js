@@ -1,4 +1,4 @@
-import { handleWebhook } from "./handlers/webhook"
+import { handleWebhook } from "./routes/webhook"
 
 export default {
   async fetch(request, env) {
