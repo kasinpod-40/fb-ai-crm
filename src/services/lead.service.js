@@ -6,6 +6,7 @@ import {
 } from "../repositories/message.repository"
 
 import { syncContact } from "./contact.service"
+import { syncDeal } from "./deal.service"
 
 export async function processLead(
   env,
@@ -54,7 +55,11 @@ export async function processLead(
 
   console.log("MESSAGE SAVED")
 
-  await syncContact(env, senderId, pageId, text, ai)
+  const contact = await syncContact(env, senderId, pageId, text, ai)
+
+  console.log("CONTACT RETURN:", JSON.stringify(contact))
+
+  await syncDeal(env, contact, ai)
 
   console.log("CONTACT SYNCED")
 }

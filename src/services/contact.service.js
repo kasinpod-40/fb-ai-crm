@@ -29,13 +29,15 @@ export async function syncContact(env, senderId, pageId, message, ai) {
   }
 
   if (contact) {
-    console.log("CONTACT FOUND:", JSON.stringify(contact))
-
     await updateContact(env, contact.record_id, fields)
 
-    console.log("CONTACT UPDATED")
-
-    return contact
+    return {
+      record_id: contact.record_id,
+      fields: {
+        ...contact.fields,
+        ...fields
+      }
+    }
   }
 
   const result = await createContact(env, {
@@ -45,5 +47,5 @@ export async function syncContact(env, senderId, pageId, message, ai) {
 
   console.log("CONTACT CREATED")
 
-  return result
+  return result.data.record
 }

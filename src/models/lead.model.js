@@ -48,6 +48,10 @@ export function calculateLeadScore(ai) {
       score = 100
       break
 
+    case "lost":
+      score = 0
+      break
+
     default:
       score = 10
   }
@@ -60,8 +64,5 @@ export function calculateLeadScore(ai) {
 }
 
 export function isWon(ai) {
-  return (
-    ai.customer_stage === "won" ||
-    ai.closed_sale === true
-  )
+  return ai.customer_stage === "won" || ai.closed_sale === true
 }

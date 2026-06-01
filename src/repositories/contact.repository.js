@@ -79,3 +79,9 @@ export async function updateContact(env, recordId, fields) {
 
   return data
 }
+
+export async function updateActiveDeal(env, recordId, activeDealId) {
+  return updateContact(env, recordId, {
+    active_deal_id: activeDealId
+  })
+}
