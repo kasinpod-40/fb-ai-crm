@@ -28,16 +28,17 @@ export async function handleWebhook(request, env) {
 
         const timestamp = messaging.timestamp
 
+        const messageId = messaging.message?.mid
+
         console.log("MESSAGE:", text)
 
-        await processLead(env, senderId, pageId, text, timestamp)
+        await processLead(env, senderId, pageId, text, timestamp, messageId)
       }
     }
 
     return new Response("EVENT_RECEIVED", { status: 200 })
   } catch (err) {
     console.log("WEBHOOK ERROR:", err)
-
-    return new Response("ERROR", { status: 500 })
+    return new Response("EVENT_RECEIVED", { status: 200 })
   }
 }

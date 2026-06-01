@@ -1,31 +1,60 @@
 import { analyze } from "./ai-router"
-import { saveMessageRecord } from "../repositories/message.repository"
-import { createLead } from "./crm"
 
-export async function processLead(env, senderId, pageId, text, timestamp) {
+import {
+  saveMessageRecord,
+  findMessageById
+} from "../repositories/message.repository"
+
+import { syncContact } from "./contact.service"
+
+export async function processLead(
+  env,
+  senderId,
+  pageId,
+  text,
+  timestamp,
+  messageId
+) {
   console.log("LEAD SERVICE START")
+
+  const exists = await findMessageById(env, messageId)
+
+  if (exists) {
+    console.log("DUPLICATE MESSAGE SKIPPED:", messageId)
+
+    return
+  }
 
   const ai = await analyze(env, text)
 
   console.log("AI RESULT:", JSON.stringify(ai))
 
   await saveMessageRecord(env, {
+    message_id: messageId,
     sender_id: senderId,
-    message: text,
     page_id: pageId,
+    message: text,
+
     intent: ai.intent,
+
     interest_level: ai.interest_level,
+
     customer_stage: ai.customer_stage,
+
     hot_lead: ai.hot_lead,
+
     closed_sale: ai.closed_sale,
+
     ai_summary: ai.summary,
+
     timestamp,
+
     created_at: new Date().toISOString()
   })
 
   console.log("MESSAGE SAVED")
 
-  await createLead(env, senderId, text, ai)
+  await syncContact(env, senderId, pageId, text, ai)
 
-  console.log("CRM SAVED")
+  console.log("CONTACT SYNCED")
 }
