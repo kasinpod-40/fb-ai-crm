@@ -57,3 +57,28 @@ export async function updateDeal(env, recordId, fields) {
 
   return data.data
 }
+
+export async function findDealByRecordId(env, recordId) {
+  const token = await getTenantAccessToken(env)
+
+  const url = `${ENDPOINTS.LARK_RECORD(
+    env.LARK_APP_TOKEN,
+    env.CRM_DEALS_TABLE_ID
+  )}/${recordId}`
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+
+  const data = await res.json()
+
+  console.log("DEAL FIND RESPONSE:", JSON.stringify(data))
+
+  if (data.code !== 0) {
+    throw new Error(`LARK DEAL FIND ERROR: ${data.msg}`)
+  }
+
+  return data.data.record
+}

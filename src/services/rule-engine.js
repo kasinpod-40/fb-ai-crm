@@ -129,8 +129,37 @@ function buildResult(intent) {
   }
 }
 
+function isThaiAddress(text) {
+  const hasPhone = /0[689]\d{8}/.test(text.replace(/\s/g, ""))
+
+  const hasAddressKeyword =
+    text.includes("ต.") ||
+    text.includes("อ.") ||
+    text.includes("จ.") ||
+    text.includes("จังหวัด") ||
+    text.includes("อำเภอ") ||
+    text.includes("ตำบล") ||
+    text.includes("หมู่") ||
+    text.includes("ม.")
+
+  const hasPostcode = /\b\d{5}\b/.test(text)
+
+  return hasPhone && hasAddressKeyword && hasPostcode
+}
+
 export function analyzeByRule(message) {
   const text = (message || "").toLowerCase().trim()
+
+  if (isThaiAddress(text)) {
+    return {
+      intent: "delivery_address",
+      interest_level: "high",
+      customer_stage: "closing",
+      hot_lead: true,
+      closed_sale: false,
+      summary: "ลูกค้าส่งข้อมูลจัดส่งแล้ว"
+    }
+  }
 
   for (const [intent, keywords] of Object.entries(RULES)) {
     if (match(text, keywords)) {

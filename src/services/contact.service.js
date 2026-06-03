@@ -6,30 +6,42 @@ import {
 
 import { mapStage, calculateLeadScore } from "../models/lead.model"
 
+import { parseContactInfo } from "./contact-parser"
+
 export async function syncContact(env, senderId, pageId, message, ai) {
+  const now = new Date().toISOString()
+
   const contact = await findContactBySenderId(env, senderId)
+
+  const currentMessageCount = Number(contact?.fields?.message_count || 0)
 
   const fields = {
     sender_id: senderId,
     page_id: pageId,
-
     current_stage: mapStage(ai),
-
     lead_score: calculateLeadScore(ai),
-
     hot_lead: ai.hot_lead,
-
     last_message: message,
-
-    last_contact_at: new Date().toISOString(),
-
+    last_contact_at: now,
     ai_summary: ai.summary,
+    message_count: currentMessageCount + 1,
+    updated_at: now
+  }
 
-    updated_at: new Date().toISOString()
+  if (ai.intent === "delivery_address") {
+    const contactInfo = parseContactInfo(message)
+
+    fields.delivery_name = contactInfo.delivery_name
+
+    fields.delivery_phone = contactInfo.delivery_phone
+
+    fields.delivery_address = contactInfo.delivery_address
   }
 
   if (contact) {
     await updateContact(env, contact.record_id, fields)
+
+    console.log("CONTACT UPDATED")
 
     return {
       record_id: contact.record_id,
@@ -42,7 +54,8 @@ export async function syncContact(env, senderId, pageId, message, ai) {
 
   const result = await createContact(env, {
     ...fields,
-    created_at: new Date().toISOString()
+    first_contact_at: now,
+    created_at: now
   })
 
   console.log("CONTACT CREATED")

@@ -1,4 +1,24 @@
 export function mapStage(ai) {
+  switch (ai.intent) {
+    case "payment_request":
+      return "Closing"
+
+    case "ask_discount":
+      return "Negotiating"
+
+    case "closed_sale":
+      return "Won"
+
+    case "lost":
+      return "Lost"
+
+    case "delivery_address":
+      return "Closing"
+
+    default:
+      break
+  }
+
   switch (ai.customer_stage) {
     case "interested":
       return "Interested"
@@ -27,24 +47,32 @@ export function calculateLeadScore(ai) {
 
   let score = 0
 
-  switch (ai.customer_stage) {
-    case "new_lead":
-      score = 10
+  switch (ai.intent) {
+    case "ask_price":
+      score = 30
       break
 
-    case "interested":
+    case "product_info":
       score = 40
       break
 
-    case "negotiating":
+    case "delivery_question":
+      score = 50
+      break
+
+    case "ask_discount":
       score = 70
       break
 
-    case "closing":
+    case "payment_request":
       score = 90
       break
 
-    case "won":
+    case "delivery_address":
+      score = 90
+      break
+
+    case "closed_sale":
       score = 100
       break
 
@@ -56,13 +84,17 @@ export function calculateLeadScore(ai) {
       score = 10
   }
 
-  if (ai.hot_lead && score < 100) {
+  if (ai.hot_lead) {
     score += 10
   }
 
   return Math.min(score, 100)
 }
 
-export function isWon(ai) {
-  return ai.customer_stage === "won" || ai.closed_sale === true
+export function isClosed(ai) {
+  return (
+    ai.customer_stage === "won" ||
+    ai.customer_stage === "lost" ||
+    ai.closed_sale === true
+  )
 }

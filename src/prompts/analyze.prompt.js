@@ -36,6 +36,7 @@ ask_price
 interested
 ready_to_buy
 closed_sale
+delivery_address
 support
 unknown
 
@@ -195,5 +196,23 @@ summary:
 สรุปพฤติกรรมลูกค้าเป็นภาษาไทย 1 ประโยคสั้นๆ
 ห้ามเกิน 100 ตัวอักษร
 ห้ามเว้นว่าง
+
+delivery_address
+
+ใช้เมื่อ:
+- ลูกค้าส่งชื่อ
+- ลูกค้าส่งที่อยู่
+- ลูกค้าส่งเบอร์โทร
+- ลูกค้าส่งข้อมูลจัดส่งสินค้า
+
+ถ้าลูกค้าส่งชื่อ ที่อยู่ เบอร์โทร หรือข้อมูลสำหรับจัดส่งสินค้า
+
+ผลลัพธ์:
+intent = delivery_address
+interest_level = high
+customer_stage = closing
+hot_lead = true
+closed_sale = false
+summary = "ลูกค้าส่งข้อมูลจัดส่งแล้ว"
 `
 }
