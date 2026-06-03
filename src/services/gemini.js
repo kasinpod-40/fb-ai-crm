@@ -1,7 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
+
 import { buildAnalyzePrompt } from "../prompts/analyze.prompt"
 
-export async function analyzeMessage(env, message) {
+import { parseAIResponse } from "./ai-parser"
+
+export async function analyzeWithGemini(env, message) {
   console.log("AI START")
 
   const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY)
@@ -11,19 +14,14 @@ export async function analyzeMessage(env, message) {
   })
 
   const prompt = buildAnalyzePrompt(message)
-  
+
   const result = await model.generateContent(prompt)
 
   const raw = result.response.text()
 
   console.log("AI RAW:", raw)
 
-  const clean = raw
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .trim()
-
-  const ai = JSON.parse(clean)
+  const ai = parseAIResponse(raw)
 
   console.log("AI PARSED:", JSON.stringify(ai))
 
