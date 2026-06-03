@@ -1,90 +1,141 @@
-function result(
-  intent,
-  interestLevel,
-  customerStage,
-  hotLead,
-  closedSale,
-  summary
-) {
+function match(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword))
+}
+
+const RULES = {
+  ask_price: ["ราคา", "ราคาเท่าไร", "ราคาเท่าไหร่", "กี่บาท", "เท่าไหร่"],
+
+  ask_discount: ["ลดได้ไหม", "ลดได้มั้ย", "ลดราคา", "มีส่วนลดไหม", "ขอลด"],
+
+  payment_request: [
+    "ขอเลขบัญชี",
+    "ส่งเลขบัญชี",
+    "พร้อมโอน",
+    "ขอ qr",
+    "ส่ง qr",
+    "ขอคิวอาร์",
+    "ชำระยังไง",
+    "จ่ายยังไง"
+  ],
+
+  delivery_question: [
+    "ค่าส่ง",
+    "ส่งวันนี้",
+    "ส่งพรุ่งนี้",
+    "ถึงเมื่อไร",
+    "กี่วันถึง"
+  ],
+
+  product_info: [
+    "มีของไหม",
+    "มีสินค้าไหม",
+    "มีสีอะไร",
+    "มีไซส์ไหม",
+    "มีไซส์อะไรบ้าง",
+    "มีขนาดไหม",
+    "พร้อมส่งไหม"
+  ],
+
+  closed_sale: [
+    "โอนแล้ว",
+    "โอนเงินแล้ว",
+    "ชำระแล้ว",
+    "จ่ายแล้ว",
+    "ส่งสลิปแล้ว"
+  ],
+
+  lost: [
+    "ไม่เอาแล้ว",
+    "ไม่เป็นไรครับ",
+    "ไม่เป็นไร",
+    "ไม่สนใจ",
+    "ยกเลิก",
+    "ขอบคุณครับไม่รับแล้ว",
+    "ไม่รับแล้ว"
+  ]
+}
+
+function buildResult(intent) {
+  const map = {
+    ask_price: {
+      interest_level: "medium",
+      customer_stage: "interested",
+      hot_lead: false,
+      closed_sale: false,
+      summary: "ลูกค้าสอบถามราคา"
+    },
+
+    ask_discount: {
+      interest_level: "high",
+      customer_stage: "negotiating",
+      hot_lead: true,
+      closed_sale: false,
+      summary: "ลูกค้าต่อรองราคา"
+    },
+
+    payment_request: {
+      interest_level: "high",
+      customer_stage: "closing",
+      hot_lead: true,
+      closed_sale: false,
+      summary: "ลูกค้าต้องการชำระเงิน"
+    },
+
+    delivery_question: {
+      interest_level: "medium",
+      customer_stage: "interested",
+      hot_lead: false,
+      closed_sale: false,
+      summary: "ลูกค้าสอบถามการจัดส่ง"
+    },
+
+    product_info: {
+      interest_level: "medium",
+      customer_stage: "interested",
+      hot_lead: false,
+      closed_sale: false,
+      summary: "ลูกค้าสอบถามข้อมูลสินค้า"
+    },
+
+    closed_sale: {
+      interest_level: "high",
+      customer_stage: "won",
+      hot_lead: true,
+      closed_sale: true,
+      summary: "ลูกค้าแจ้งชำระเงินแล้ว"
+    },
+
+    lost: {
+      interest_level: "low",
+      customer_stage: "lost",
+      hot_lead: false,
+      closed_sale: false,
+      summary: "ลูกค้าปฏิเสธการซื้อ"
+    },
+
+    short_chat: {
+      intent: "small_talk",
+      interest_level: "low",
+      customer_stage: "new_lead",
+      hot_lead: false,
+      closed_sale: false,
+      summary: "ข้อความทั่วไป"
+    }
+  }
+
   return {
     intent,
-    interest_level: interestLevel,
-    customer_stage: customerStage,
-    hot_lead: hotLead,
-    closed_sale: closedSale,
-    summary
+    ...map[intent]
   }
 }
 
-export function analyzeByRule(text) {
-  const msg = (text || "").trim().toLowerCase()
+export function analyzeByRule(message) {
+  const text = (message || "").toLowerCase().trim()
 
-  // WON
-
-  if (
-    msg.includes("โอนแล้ว") ||
-    msg.includes("จ่ายแล้ว") ||
-    msg.includes("ชำระแล้ว") ||
-    msg.includes("ส่งสลิปแล้ว")
-  ) {
-    return result(
-      "closed_sale",
-      "high",
-      "won",
-      true,
-      true,
-      "ลูกค้าชำระเงินแล้ว"
-    )
-  }
-
-  // LOST
-
-  if (
-    msg.includes("ไม่เอาแล้ว") ||
-    msg.includes("ไม่เป็นไร") ||
-    msg.includes("ขอผ่าน") ||
-    msg.includes("ไว้ก่อน") ||
-    msg.includes("ไม่สะดวก") ||
-    msg.includes("ไม่สนใจแล้ว")
-  ) {
-    return result(
-      "unknown",
-      "low",
-      "lost",
-      false,
-      false,
-      "ลูกค้ายุติการตัดสินใจซื้อ"
-    )
-  }
-
-  // CLOSING
-
-  if (
-    msg.includes("ขอเลขบัญชี") ||
-    msg.includes("ส่งเลขบัญชี") ||
-    msg.includes("ช่องทางชำระเงิน") ||
-    msg.includes("ส่งที่อยู่")
-  ) {
-    return result(
-      "ready_to_buy",
-      "high",
-      "closing",
-      true,
-      false,
-      "ลูกค้าพร้อมสั่งซื้อ"
-    )
-  }
-
-  // GREETING
-
-  if (
-    msg === "สวัสดี" ||
-    msg === "สวัสดีครับ" ||
-    msg === "สวัสดีค่ะ" ||
-    msg === "hello" ||
-    msg === "hi"
-  ) {
-    return result("greeting", "low", "new_lead", false, false, "ลูกค้าทักทาย")
+  for (const [intent, keywords] of Object.entries(RULES)) {
+    if (match(text, keywords)) {
+      return buildResult(intent)
+    }
   }
 
   return null
