@@ -85,3 +85,9 @@ export async function updateActiveDeal(env, recordId, activeDealId) {
     active_deal_id: activeDealId
   })
 }
+
+export async function updateActiveOrder(env, recordId, activeOrderId) {
+  return updateContact(env, recordId, {
+    active_order_id: activeOrderId
+  })
+}

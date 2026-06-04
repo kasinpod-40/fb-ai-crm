@@ -8,6 +8,8 @@ import { mapStage, calculateLeadScore } from "../models/lead.model"
 
 import { parseContactInfo } from "./contact-parser"
 
+import { createOrderFromContact } from "./order.service"
+
 export async function syncContact(env, senderId, pageId, message, ai) {
   const now = new Date().toISOString()
 
@@ -43,13 +45,19 @@ export async function syncContact(env, senderId, pageId, message, ai) {
 
     console.log("CONTACT UPDATED")
 
-    return {
+    const updatedContact = {
       record_id: contact.record_id,
       fields: {
         ...contact.fields,
         ...fields
       }
     }
+
+    if (ai.intent === "delivery_address") {
+      await createOrderFromContact(env, updatedContact)
+    }
+
+    return updatedContact
   }
 
   const result = await createContact(env, {
@@ -60,5 +68,11 @@ export async function syncContact(env, senderId, pageId, message, ai) {
 
   console.log("CONTACT CREATED")
 
-  return result.data.record
+  const createdContact = result.data.record
+
+  if (ai.intent === "delivery_address") {
+    await createOrderFromContact(env, createdContact)
+  }
+
+  return createdContact
 }

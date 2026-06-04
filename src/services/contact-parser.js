@@ -12,9 +12,21 @@ export function parseContactInfo(text) {
 
   const name = lines.length > 0 ? lines[0] : ""
 
+  let address = text
+
+  if (name) {
+    address = address.replace(name, "")
+  }
+
+  if (phone) {
+    address = address.replace(phone, "")
+  }
+
+  address = address.replace(/\s+/g, " ").trim()
+
   return {
     delivery_name: name,
     delivery_phone: phone,
-    delivery_address: message
+    delivery_address: address
   }
 }
