@@ -52,7 +52,9 @@ const RULES = {
     "ยกเลิก",
     "ขอบคุณครับไม่รับแล้ว",
     "ไม่รับแล้ว"
-  ]
+  ],
+
+  payment_amount: ["ยอด", "รวม", "ราคา", "โอน", "ชำระ"]
 }
 
 function buildResult(intent) {
