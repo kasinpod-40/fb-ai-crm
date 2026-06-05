@@ -1,4 +1,5 @@
 import { analyze } from "./ai-router"
+import { analyzeImage } from "./image-ai"
 
 import {
   saveMessageRecord,
@@ -14,7 +15,8 @@ export async function processLead(
   pageId,
   text,
   timestamp,
-  messageId
+  messageId,
+  metadata = {}
 ) {
   console.log("LEAD SERVICE START")
 
@@ -22,11 +24,69 @@ export async function processLead(
 
   if (exists) {
     console.log("DUPLICATE MESSAGE SKIPPED:", messageId)
-
     return
   }
 
-  const ai = await analyze(env, text)
+  const messageType = metadata.messageType || "text"
+  const imageUrl = metadata.imageUrl || ""
+  const attachmentId = metadata.attachmentId || ""
+
+  let ai
+
+  if (messageType === "image") {
+    try {
+      const imageAI = await analyzeImage(env, imageUrl)
+
+      console.log("IMAGE AI:", JSON.stringify(imageAI))
+
+      ai = {
+        intent:
+          imageAI.image_type === "payment_slip"
+            ? "closed_sale"
+            : "product_info",
+
+        interest_level:
+          imageAI.image_type === "payment_slip" ? "high" : "medium",
+
+        customer_stage:
+          imageAI.image_type === "payment_slip" ? "won" : "interested",
+
+        hot_lead: imageAI.image_type === "payment_slip",
+
+        closed_sale: imageAI.image_type === "payment_slip",
+
+        summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
+
+        image_ai: {
+          ...imageAI,
+          image_url: imageUrl
+        }
+      }
+    } catch (err) {
+      console.log("IMAGE AI FAILED:", err)
+
+      ai = {
+        intent: "image_received",
+        interest_level: "medium",
+        customer_stage: "interested",
+        hot_lead: false,
+        closed_sale: false,
+        summary: "ลูกค้าส่งรูปภาพ แต่ระบบยังวิเคราะห์รูปไม่ได้",
+        image_ai: {
+          image_type: "unknown",
+          product_name: "",
+          slip_amount: 0,
+          slip_bank: "",
+          slip_time: "",
+          confidence: 0,
+          summary: "วิเคราะห์รูปไม่สำเร็จ",
+          image_url: imageUrl
+        }
+      }
+    }
+  } else {
+    ai = await analyze(env, text)
+  }
 
   console.log("AI RESULT:", JSON.stringify(ai))
 
@@ -34,22 +94,27 @@ export async function processLead(
     message_id: messageId,
     sender_id: senderId,
     page_id: pageId,
-    message: text,
+    message: messageType === "image" && "รูปภาพ" || text,
+
+    message_type: messageType,
+    image_url: imageUrl,
+    attachment_id: attachmentId,
 
     intent: ai.intent,
-
     interest_level: ai.interest_level,
-
     customer_stage: ai.customer_stage,
-
     hot_lead: ai.hot_lead,
-
     closed_sale: ai.closed_sale,
-
     ai_summary: ai.summary,
 
-    timestamp,
+    image_type: ai.image_ai?.image_type || "",
+    product_name: ai.image_ai?.product_name || "",
+    slip_amount: ai.image_ai?.slip_amount || 0,
+    slip_bank: ai.image_ai?.slip_bank || "",
+    slip_time: ai.image_ai?.slip_time || "",
+    image_confidence: ai.image_ai?.confidence || 0,
 
+    timestamp,
     created_at: new Date().toISOString()
   })
 

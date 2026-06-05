@@ -34,10 +34,17 @@ export async function syncContact(env, senderId, pageId, message, ai) {
     const contactInfo = parseContactInfo(message)
 
     fields.delivery_name = contactInfo.delivery_name
-
     fields.delivery_phone = contactInfo.delivery_phone
-
     fields.delivery_address = contactInfo.delivery_address
+  }
+
+  if (ai.image_ai?.image_type === "product_image" && ai.image_ai.product_name) {
+    fields.product_name = ai.image_ai.product_name
+    fields.product_source = "image"
+  }
+
+  if (ai.image_ai?.image_url) {
+    fields.last_image_url = ai.image_ai.image_url
   }
 
   if (contact) {

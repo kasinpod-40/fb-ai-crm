@@ -9,7 +9,12 @@ import { mapStage, calculateLeadScore, isClosed } from "../models/lead.model"
 
 import { parseContactInfo } from "./contact-parser"
 
-import { cancelActiveOrder, markActiveOrderPaid } from "./order.service"
+import {
+  cancelActiveOrder,
+  markActiveOrderPaid,
+  updateProductFromImage,
+  updateOrderFromSlip
+} from "./order.service"
 
 export async function syncDeal(env, contact, ai) {
   const now = new Date().toISOString()
@@ -19,11 +24,18 @@ export async function syncDeal(env, contact, ai) {
   console.log("ACTIVE DEAL:", activeDealId)
 
   if (activeDealId) {
+    const productName =
+      ai.image_ai?.product_name || contact.fields.product_name || ""
+
     const fields = {
       stage: mapStage(ai),
       lead_score: calculateLeadScore(ai),
       ai_summary: ai.summary,
       updated_at: now
+    }
+
+    if (productName) {
+      fields.product_name = productName
     }
 
     if (ai.customer_stage === "won") {
@@ -33,7 +45,6 @@ export async function syncDeal(env, contact, ai) {
       await markActiveOrderPaid(env, contact)
 
       await updateActiveDeal(env, contact.record_id, "")
-
       await updateActiveOrder(env, contact.record_id, "")
 
       console.log("ORDER PAID")
@@ -46,20 +57,43 @@ export async function syncDeal(env, contact, ai) {
       fields.closed_at = now
 
       await cancelActiveOrder(env, contact)
+
       await updateActiveDeal(env, contact.record_id, "")
       await updateActiveOrder(env, contact.record_id, "")
 
       console.log("ACTIVE DEAL CLEARED")
+      console.log("ACTIVE ORDER CLEARED")
     }
 
     if (ai.intent === "delivery_address") {
       const contactInfo = parseContactInfo(contact.fields.last_message)
 
       fields.delivery_name = contactInfo.delivery_name
-
       fields.delivery_phone = contactInfo.delivery_phone
-
       fields.delivery_address = contactInfo.delivery_address
+    }
+
+    if (
+      ai.image_ai?.image_type === "product_image" &&
+      ai.image_ai.product_name
+    ) {
+      await updateProductFromImage(env, contact, ai.image_ai.product_name)
+
+      console.log("PRODUCT DETECTED:", ai.image_ai.product_name)
+    }
+
+    if (ai.image_ai?.image_type === "payment_slip") {
+      await updateOrderFromSlip(env, contact, ai.image_ai)
+
+      fields.status = "Won"
+      fields.closed_at = now
+
+      await updateActiveDeal(env, contact.record_id, "")
+      await updateActiveOrder(env, contact.record_id, "")
+
+      console.log("SLIP DETECTED")
+      console.log("ACTIVE DEAL CLEARED")
+      console.log("ACTIVE ORDER CLEARED")
     }
 
     await updateDeal(env, activeDealId, fields)
@@ -68,6 +102,9 @@ export async function syncDeal(env, contact, ai) {
 
     return
   }
+
+  const productName =
+    ai.image_ai?.product_name || contact.fields.product_name || ""
 
   const result = await createDeal(env, {
     deal_id: crypto.randomUUID(),
@@ -88,6 +125,8 @@ export async function syncDeal(env, contact, ai) {
           : "Open",
 
     ai_summary: ai.summary,
+
+    product_name: productName,
 
     created_at: now,
 

@@ -1,8 +1,4 @@
-import {
-  createOrder,
-  findOrderByDealRecordId,
-  updateOrder
-} from "../repositories/order.repository"
+import { createOrder, updateOrder } from "../repositories/order.repository"
 
 import { updateActiveOrder } from "../repositories/contact.repository"
 
@@ -17,7 +13,6 @@ export async function createOrderFromContact(env, contact) {
 
   if (activeOrderId) {
     console.log("ACTIVE ORDER EXISTS")
-
     return
   }
 
@@ -35,6 +30,8 @@ export async function createOrderFromContact(env, contact) {
     phone: contact.fields.delivery_phone || "",
 
     address: contact.fields.delivery_address || "",
+
+    product_name: contact.fields.product_name || "",
 
     order_status: "New",
 
@@ -67,12 +64,10 @@ export async function createOrderFromContact(env, contact) {
 
   await updateOrder(env, orderRecordId, {
     invoice_pdf_url: invoiceUrl,
-
     updated_at: now
   })
 
   console.log("INVOICE URL SAVED:", invoiceUrl)
-
   console.log("ORDER CREATED")
 }
 
@@ -83,11 +78,8 @@ export async function markOrderPaid(env, orderRecordId) {
 
   await updateOrder(env, orderRecordId, {
     payment_status: "Paid",
-
     order_status: "Completed",
-
     paid_at: now,
-
     updated_at: now
   })
 
@@ -101,7 +93,6 @@ export async function markActiveOrderPaid(env, contact) {
 
   if (!orderId) {
     console.log("NO ACTIVE ORDER TO MARK PAID")
-
     return
   }
 
@@ -112,6 +103,7 @@ export async function cancelActiveOrder(env, contact) {
   const orderId = contact.fields.active_order_id
 
   if (!orderId) {
+    console.log("NO ACTIVE ORDER TO CANCEL")
     return
   }
 
@@ -123,4 +115,49 @@ export async function cancelActiveOrder(env, contact) {
   })
 
   console.log("ORDER CANCELLED")
+}
+
+export async function updateProductFromImage(env, contact, productName) {
+  if (!productName) {
+    return
+  }
+
+  const orderId = contact.fields.active_order_id
+
+  if (!orderId) {
+    console.log("NO ACTIVE ORDER FOR PRODUCT")
+    return
+  }
+
+  await updateOrder(env, orderId, {
+    product_name: productName,
+    updated_at: new Date().toISOString()
+  })
+
+  console.log("ORDER PRODUCT UPDATED:", productName)
+}
+
+export async function updateOrderFromSlip(env, contact, imageAI) {
+  const orderId = contact.fields.active_order_id
+
+  if (!orderId) {
+    console.log("NO ACTIVE ORDER FOR SLIP")
+    return
+  }
+
+  const now = new Date().toISOString()
+
+  await updateOrder(env, orderId, {
+    total_amount: imageAI.slip_amount || 0,
+    slip_amount: imageAI.slip_amount || 0,
+    slip_bank: imageAI.slip_bank || "",
+    slip_time: imageAI.slip_time || "",
+    slip_image_url: imageAI.image_url || "",
+    payment_status: "Paid",
+    order_status: "Completed",
+    paid_at: now,
+    updated_at: now
+  })
+
+  console.log("ORDER UPDATED FROM SLIP")
 }
