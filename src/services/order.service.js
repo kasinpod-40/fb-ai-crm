@@ -4,21 +4,20 @@ import { updateActiveOrder } from "../repositories/contact.repository"
 
 import { generateInvoiceNumber } from "../utils/invoice"
 
-export async function createOrderFromContact(env, contact) {
-  console.log("CREATE ORDER FROM CONTACT START")
+function getNow() {
+  return new Date().toISOString()
+}
 
-  const activeOrderId = contact.fields.active_order_id
-
-  console.log("ACTIVE ORDER:", activeOrderId)
-
-  if (activeOrderId) {
-    console.log("ACTIVE ORDER EXISTS")
-    return
+function getInvoiceUrl(env, orderRecordId) {
+  if (!env.PUBLIC_BASE_URL) {
+    return ""
   }
 
-  const now = new Date().toISOString()
+  return `${env.PUBLIC_BASE_URL}/invoice/${orderRecordId}`
+}
 
-  const result = await createOrder(env, {
+function buildOrderFields(contact, now) {
+  return {
     order_id: crypto.randomUUID(),
 
     sender_id: contact.fields.sender_id,
@@ -49,8 +48,27 @@ export async function createOrderFromContact(env, contact) {
 
     paid_at: "",
 
-    invoice_pdf_url: ""
-  })
+    invoice_pdf_url: "",
+
+    sales_owner: contact.fields.sales_owner || ""
+  }
+}
+
+export async function createOrderFromContact(env, contact) {
+  console.log("CREATE ORDER FROM CONTACT START")
+
+  const activeOrderId = contact.fields.active_order_id
+
+  console.log("ACTIVE ORDER:", activeOrderId)
+
+  if (activeOrderId) {
+    console.log("ACTIVE ORDER EXISTS")
+    return
+  }
+
+  const now = getNow()
+
+  const result = await createOrder(env, buildOrderFields(contact, now))
 
   const orderRecordId = result.record.record_id
 
@@ -60,21 +78,26 @@ export async function createOrderFromContact(env, contact) {
 
   console.log("ACTIVE ORDER SAVED TO CONTACT")
 
-  const invoiceUrl = `${env.PUBLIC_BASE_URL}/invoice/${orderRecordId}`
+  const invoiceUrl = getInvoiceUrl(env, orderRecordId)
 
-  await updateOrder(env, orderRecordId, {
-    invoice_pdf_url: invoiceUrl,
-    updated_at: now
-  })
+  if (invoiceUrl) {
+    await updateOrder(env, orderRecordId, {
+      invoice_pdf_url: invoiceUrl,
+      updated_at: now
+    })
 
-  console.log("INVOICE URL SAVED:", invoiceUrl)
+    console.log("INVOICE URL SAVED:", invoiceUrl)
+  } else {
+    console.log("PUBLIC_BASE_URL NOT SET, SKIP INVOICE URL")
+  }
+
   console.log("ORDER CREATED")
 }
 
 export async function markOrderPaid(env, orderRecordId) {
   console.log("MARK ORDER PAID:", orderRecordId)
 
-  const now = new Date().toISOString()
+  const now = getNow()
 
   await updateOrder(env, orderRecordId, {
     payment_status: "Paid",
@@ -107,7 +130,7 @@ export async function cancelActiveOrder(env, contact) {
     return
   }
 
-  const now = new Date().toISOString()
+  const now = getNow()
 
   await updateOrder(env, orderId, {
     order_status: "Cancelled",
@@ -131,7 +154,7 @@ export async function updateProductFromImage(env, contact, productName) {
 
   await updateOrder(env, orderId, {
     product_name: productName,
-    updated_at: new Date().toISOString()
+    updated_at: getNow()
   })
 
   console.log("ORDER PRODUCT UPDATED:", productName)
@@ -145,7 +168,7 @@ export async function updateOrderFromSlip(env, contact, imageAI) {
     return
   }
 
-  const now = new Date().toISOString()
+  const now = getNow()
 
   await updateOrder(env, orderId, {
     total_amount: imageAI.slip_amount || 0,

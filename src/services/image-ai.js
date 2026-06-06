@@ -1,5 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
+function cleanJson(raw) {
+  return raw
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim()
+}
+
 export async function analyzeImage(env, imageUrl) {
   const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY)
 
@@ -9,6 +16,12 @@ export async function analyzeImage(env, imageUrl) {
 
   const imageRes = await fetch(imageUrl)
 
+  if (!imageRes.ok) {
+    throw new Error(`IMAGE FETCH FAILED: ${imageRes.status}`)
+  }
+
+  const mimeType = imageRes.headers.get("content-type") || "image/jpeg"
+
   const imageBuffer = await imageRes.arrayBuffer()
 
   const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)))
@@ -16,15 +29,11 @@ export async function analyzeImage(env, imageUrl) {
   const prompt = `
 วิเคราะห์รูปภาพจาก Facebook Messenger
 
-ให้ตอบ JSON เท่านั้น ห้ามใส่ markdown
+ตอบ JSON เท่านั้น
+ห้ามใส่ markdown
+ห้ามใส่ \`\`\`json
 
-ระบุว่ารูปนี้คือ:
-- product_image = รูปสินค้า
-- payment_slip = สลิปโอนเงิน
-- other = อื่นๆ
-
-ถ้าเป็นสินค้า ให้ระบุชื่อสินค้าโดยประมาณ
-ถ้าเป็นสลิป ให้ดึงยอดเงิน ธนาคาร และเวลาที่โอน ถ้าอ่านได้
+Schema:
 
 {
   "image_type": "",
@@ -35,6 +44,19 @@ export async function analyzeImage(env, imageUrl) {
   "confidence": 0,
   "summary": ""
 }
+
+image_type:
+
+product_image
+payment_slip
+other
+
+กฎ:
+
+- ถ้าเป็นรูปสินค้า ให้พยายามระบุชื่อสินค้า
+- ถ้าเป็นสลิป ให้ดึงยอดเงิน ธนาคาร และเวลา
+- confidence ต้องเป็นเลข 0 ถึง 1
+- summary เป็นภาษาไทย
 `
 
   const result = await model.generateContent([
@@ -42,17 +64,26 @@ export async function analyzeImage(env, imageUrl) {
     {
       inlineData: {
         data: base64Image,
-        mimeType: "image/jpeg"
+        mimeType
       }
     }
   ])
 
   const raw = result.response.text()
 
-  const clean = raw
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .trim()
+  console.log("IMAGE RAW:", raw)
 
-  return JSON.parse(clean)
+  const clean = cleanJson(raw)
+
+  const parsed = JSON.parse(clean)
+
+  return {
+    image_type: parsed.image_type || "other",
+    product_name: parsed.product_name || "",
+    slip_amount: Number(parsed.slip_amount || 0),
+    slip_bank: parsed.slip_bank || "",
+    slip_time: parsed.slip_time || "",
+    confidence: Number(parsed.confidence || 0),
+    summary: parsed.summary || "ไม่สามารถสรุปรูปภาพได้"
+  }
 }

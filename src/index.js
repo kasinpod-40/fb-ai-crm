@@ -5,6 +5,23 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url)
 
+    if (request.method === "GET" && url.pathname === "/test-notify") {
+      await fetch(env.LARK_BOT_WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          msg_type: "text",
+          content: {
+            text: "🚀 Test Notification"
+          }
+        })
+      })
+
+      return new Response("OK")
+    }
+
     // INVOICE PAGE
     // ต้องอยู่ก่อน VERIFY WEBHOOK
     if (request.method === "GET" && url.pathname.startsWith("/invoice/")) {

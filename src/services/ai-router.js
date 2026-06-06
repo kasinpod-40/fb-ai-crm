@@ -4,25 +4,42 @@ import { analyzeWithWorkersAI } from "./workers-ai"
 
 import { analyzeWithGemini } from "./gemini"
 
+function normalizeAIResult(ai) {
+  return {
+    intent: ai?.intent || "unknown",
+    interest_level: ai?.interest_level || "low",
+    customer_stage: ai?.customer_stage || "new_lead",
+    hot_lead: ai?.hot_lead === true,
+    closed_sale: ai?.closed_sale === true,
+    summary: ai?.summary || "ไม่สามารถวิเคราะห์ข้อความได้"
+  }
+}
+
 export async function analyze(env, text) {
   const ruleResult = analyzeByRule(text)
 
   if (ruleResult) {
-    console.log("RULE MATCH")
+    console.log("USING RULE ENGINE")
 
-    return ruleResult
+    return normalizeAIResult(ruleResult)
   }
 
   try {
-    return await analyzeWithWorkersAI(env, text)
+    const workersAIResult = await analyzeWithWorkersAI(env, text)
+
     console.log("USING WORKERS AI")
+
+    return normalizeAIResult(workersAIResult)
   } catch (err) {
     console.log("WORKERS AI FAILED:", err)
   }
 
   try {
-    return await analyzeWithGemini(env, text)
+    const geminiResult = await analyzeWithGemini(env, text)
+
     console.log("USING GEMINI")
+
+    return normalizeAIResult(geminiResult)
   } catch (err) {
     console.log("GEMINI FAILED:", err)
   }

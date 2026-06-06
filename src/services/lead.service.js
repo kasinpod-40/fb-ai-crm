@@ -9,6 +9,59 @@ import {
 import { syncContact } from "./contact.service"
 import { syncDeal } from "./deal.service"
 
+import {
+  getAiReviewReason,
+  notifyAiReviewRequired
+} from "./notification.service"
+
+function buildImageAIResult(imageAI, imageUrl) {
+  const isPaymentSlip = imageAI.image_type === "payment_slip"
+
+  return {
+    intent: isPaymentSlip ? "closed_sale" : "product_info",
+
+    interest_level: isPaymentSlip ? "high" : "medium",
+
+    customer_stage: isPaymentSlip ? "won" : "interested",
+
+    hot_lead: isPaymentSlip,
+
+    closed_sale: isPaymentSlip,
+
+    summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
+
+    image_ai: {
+      ...imageAI,
+      image_url: imageUrl
+    }
+  }
+}
+
+function buildImageFallbackResult(imageUrl) {
+  return {
+    intent: "image_received",
+    interest_level: "medium",
+    customer_stage: "interested",
+    hot_lead: false,
+    closed_sale: false,
+    summary: "ลูกค้าส่งรูปภาพ แต่ระบบยังวิเคราะห์รูปไม่ได้",
+    image_ai: {
+      image_type: "unknown",
+      product_name: "",
+      slip_amount: 0,
+      slip_bank: "",
+      slip_time: "",
+      confidence: 0,
+      summary: "วิเคราะห์รูปไม่สำเร็จ",
+      image_url: imageUrl
+    }
+  }
+}
+
+function buildSavedMessageText(messageType, text) {
+  return messageType === "image" ? "รูปภาพ" : text
+}
+
 export async function processLead(
   env,
   senderId,
@@ -39,50 +92,11 @@ export async function processLead(
 
       console.log("IMAGE AI:", JSON.stringify(imageAI))
 
-      ai = {
-        intent:
-          imageAI.image_type === "payment_slip"
-            ? "closed_sale"
-            : "product_info",
-
-        interest_level:
-          imageAI.image_type === "payment_slip" ? "high" : "medium",
-
-        customer_stage:
-          imageAI.image_type === "payment_slip" ? "won" : "interested",
-
-        hot_lead: imageAI.image_type === "payment_slip",
-
-        closed_sale: imageAI.image_type === "payment_slip",
-
-        summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
-
-        image_ai: {
-          ...imageAI,
-          image_url: imageUrl
-        }
-      }
+      ai = buildImageAIResult(imageAI, imageUrl)
     } catch (err) {
       console.log("IMAGE AI FAILED:", err)
 
-      ai = {
-        intent: "image_received",
-        interest_level: "medium",
-        customer_stage: "interested",
-        hot_lead: false,
-        closed_sale: false,
-        summary: "ลูกค้าส่งรูปภาพ แต่ระบบยังวิเคราะห์รูปไม่ได้",
-        image_ai: {
-          image_type: "unknown",
-          product_name: "",
-          slip_amount: 0,
-          slip_bank: "",
-          slip_time: "",
-          confidence: 0,
-          summary: "วิเคราะห์รูปไม่สำเร็จ",
-          image_url: imageUrl
-        }
-      }
+      ai = buildImageFallbackResult(imageUrl)
     }
   } else {
     ai = await analyze(env, text)
@@ -94,7 +108,7 @@ export async function processLead(
     message_id: messageId,
     sender_id: senderId,
     page_id: pageId,
-    message: messageType === "image" && "รูปภาพ" || text,
+    message: buildSavedMessageText(messageType, text),
 
     message_type: messageType,
     image_url: imageUrl,
@@ -123,6 +137,12 @@ export async function processLead(
   const contact = await syncContact(env, senderId, pageId, text, ai)
 
   console.log("CONTACT RETURN:", JSON.stringify(contact))
+
+  const reviewReason = getAiReviewReason(ai)
+
+  if (reviewReason) {
+    await notifyAiReviewRequired(env, contact, ai, reviewReason)
+  }
 
   await syncDeal(env, contact, ai)
 
