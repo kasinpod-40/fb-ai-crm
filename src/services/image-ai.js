@@ -80,10 +80,28 @@ other
   return {
     image_type: parsed.image_type || "other",
     product_name: parsed.product_name || "",
-    slip_amount: Number(parsed.slip_amount || 0),
+    slip_amount: toNumber(parsed.slip_amount),
     slip_bank: parsed.slip_bank || "",
     slip_time: parsed.slip_time || "",
     confidence: Number(parsed.confidence || 0),
     summary: parsed.summary || "ไม่สามารถสรุปรูปภาพได้"
   }
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
 }

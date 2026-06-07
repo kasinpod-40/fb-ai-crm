@@ -7,7 +7,7 @@ export function mapStage(ai) {
       return "Negotiating"
 
     case "closed_sale":
-      return "Won"
+      return "Closing"
 
     case "lost":
       return "Lost"

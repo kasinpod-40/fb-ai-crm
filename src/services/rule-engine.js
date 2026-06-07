@@ -101,9 +101,9 @@ function buildResult(intent) {
 
     closed_sale: {
       interest_level: "high",
-      customer_stage: "won",
+      customer_stage: "closing",
       hot_lead: true,
-      closed_sale: true,
+      closed_sale: false,
       summary: "ลูกค้าแจ้งชำระเงินแล้ว"
     },
 

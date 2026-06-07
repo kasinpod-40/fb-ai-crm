@@ -1,8 +1,4 @@
-import {
-  updateContact,
-  updateActiveDeal,
-  updateActiveOrder
-} from "../repositories/contact.repository"
+import { updateContact } from "../repositories/contact.repository"
 
 import { updateDeal } from "../repositories/deal.repository"
 
