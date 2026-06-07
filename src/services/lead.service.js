@@ -22,11 +22,17 @@ function buildImageAIResult(imageAI, imageUrl) {
 
     interest_level: isPaymentSlip ? "high" : "medium",
 
-    customer_stage: isPaymentSlip ? "won" : "interested",
+    // สำคัญ:
+    // ถ้าเป็นสลิปแต่ยังไม่รู้ว่ามี Order ไหม
+    // ห้ามตั้งเป็น won ตั้งแต่ตรงนี้
+    customer_stage: isPaymentSlip ? "closing" : "interested",
 
     hot_lead: isPaymentSlip,
 
-    closed_sale: isPaymentSlip,
+    // สำคัญ:
+    // ห้าม true จากรูปสลิปทันที
+    // ให้ payment.service เป็นคนปิด Paid/Won หลัง apply payment สำเร็จ
+    closed_sale: false,
 
     summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
 
@@ -142,6 +148,11 @@ export async function processLead(
 
   if (reviewReason) {
     await notifyAiReviewRequired(env, contact, ai, reviewReason)
+  }
+
+  if (contact.fields.payment_completed_from_pending) {
+    console.log("SKIP SYNC DEAL: PAYMENT COMPLETED FROM PENDING")
+    return
   }
 
   await syncDeal(env, contact, ai)

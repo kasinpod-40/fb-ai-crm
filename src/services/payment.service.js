@@ -20,7 +20,7 @@ function getNow() {
 function buildPendingSlipFields(imageAI) {
   return {
     pending_payment: true,
-    pending_slip_amount: imageAI.slip_amount || 0,
+    pending_slip_amount: toNumber(imageAI.slip_amount),
     pending_slip_bank: imageAI.slip_bank || "",
     pending_slip_time: imageAI.slip_time || "",
     pending_slip_image_url: imageAI.image_url || ""
@@ -29,12 +29,13 @@ function buildPendingSlipFields(imageAI) {
 
 function buildPaymentFieldsFromImageAI(imageAI, now) {
   return {
-    total_amount: imageAI.slip_amount || 0,
-    slip_amount: imageAI.slip_amount || 0,
+    total_amount: toNumber(imageAI.slip_amount),
+    slip_amount: toNumber(imageAI.slip_amount),
     slip_bank: imageAI.slip_bank || "",
     slip_time: imageAI.slip_time || "",
     slip_image_url: imageAI.image_url || "",
     payment_status: "Paid",
+    payment_verified: false,
     order_status: "Completed",
     paid_at: now,
     updated_at: now
@@ -43,12 +44,13 @@ function buildPaymentFieldsFromImageAI(imageAI, now) {
 
 function buildPaymentFieldsFromPending(contact, now) {
   return {
-    total_amount: contact.fields.pending_slip_amount || 0,
-    slip_amount: contact.fields.pending_slip_amount || 0,
+    total_amount: toNumber(contact.fields.pending_slip_amount),
+    slip_amount: toNumber(contact.fields.pending_slip_amount),
     slip_bank: contact.fields.pending_slip_bank || "",
     slip_time: contact.fields.pending_slip_time || "",
     slip_image_url: contact.fields.pending_slip_image_url || "",
     payment_status: "Paid",
+    payment_verified: false,
     order_status: "Completed",
     paid_at: now,
     updated_at: now
@@ -57,7 +59,7 @@ function buildPaymentFieldsFromPending(contact, now) {
 
 function buildPendingImageAI(contact) {
   return {
-    slip_amount: contact.fields.pending_slip_amount || 0,
+    slip_amount: toNumber(contact.fields.pending_slip_amount),
     slip_bank: contact.fields.pending_slip_bank || "",
     slip_time: contact.fields.pending_slip_time || "",
     image_url: contact.fields.pending_slip_image_url || "",
@@ -87,7 +89,7 @@ export async function savePendingPayment(env, contact, imageAI) {
   await updateContact(env, contact.record_id, buildPendingSlipFields(imageAI))
 
   contact.fields.pending_payment = true
-  contact.fields.pending_slip_amount = imageAI.slip_amount || 0
+  contact.fields.pending_slip_amount = toNumber(imageAI.slip_amount)
   contact.fields.pending_slip_bank = imageAI.slip_bank || ""
   contact.fields.pending_slip_time = imageAI.slip_time || ""
   contact.fields.pending_slip_image_url = imageAI.image_url || ""
@@ -161,8 +163,34 @@ export async function closeDealAfterPayment(env, contact, dealRecordId) {
     updated_at: now
   })
 
-  await updateActiveDeal(env, contact.record_id, "")
-  await updateActiveOrder(env, contact.record_id, "")
+  await updateContact(env, contact.record_id, {
+    active_deal_id: "",
+    active_order_id: "",
+    current_stage: "Won",
+    hot_lead: true,
+    ai_summary: "ลูกค้าชำระเงินแล้ว ระบบปิดการขายสำเร็จ"
+  })
+
+  // await updateActiveDeal(env, contact.record_id, "")
+  // await updateActiveOrder(env, contact.record_id, "")
 
   console.log("DEAL CLOSED AFTER PAYMENT")
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
 }

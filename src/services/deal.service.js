@@ -5,15 +5,11 @@ import {
   updateActiveOrder
 } from "../repositories/contact.repository"
 
-import { mapStage, calculateLeadScore, isClosed } from "../models/lead.model"
+import { mapStage, calculateLeadScore } from "../models/lead.model"
 
 import { parseContactInfo } from "./contact-parser"
 
-import {
-  cancelActiveOrder,
-  markActiveOrderPaid,
-  updateProductFromImage
-} from "./order.service"
+import { cancelActiveOrder, updateProductFromImage } from "./order.service"
 
 import {
   applySlipToActiveOrder,
@@ -25,6 +21,10 @@ import { notifyAiReviewRequired } from "./notification.service"
 
 function getProductName(contact, ai) {
   return ai.image_ai?.product_name || contact.fields.product_name || ""
+}
+
+function isPaymentSlip(ai) {
+  return ai.image_ai?.image_type === "payment_slip"
 }
 
 function buildDealUpdateFields(contact, ai, now) {
@@ -52,22 +52,6 @@ function buildDealUpdateFields(contact, ai, now) {
   return fields
 }
 
-async function closeDealAsWon(env, contact, fields, now) {
-  fields.status = "Won"
-  fields.stage = "Won"
-  fields.closed_at = now
-
-  const orderPaid = await markActiveOrderPaid(env, contact)
-
-  await updateActiveDeal(env, contact.record_id, "")
-  await updateActiveOrder(env, contact.record_id, "")
-
-  console.log("DEAL CLOSED AS WON")
-  console.log("ORDER PAID:", orderPaid)
-  console.log("ACTIVE DEAL CLEARED")
-  console.log("ACTIVE ORDER CLEARED")
-}
-
 async function closeDealAsLost(env, contact, fields, now) {
   fields.status = "Lost"
   fields.stage = "Lost"
@@ -92,7 +76,7 @@ async function handleProductImage(env, contact, ai) {
 }
 
 async function handlePaymentSlip(env, contact, ai, activeDealId) {
-  if (ai.image_ai?.image_type !== "payment_slip") {
+  if (!isPaymentSlip(ai)) {
     return false
   }
 
@@ -113,8 +97,36 @@ async function handlePaymentSlip(env, contact, ai, activeDealId) {
   return true
 }
 
+async function handleClaimedPaymentByText(env, contact, ai, fields) {
+  if (isPaymentSlip(ai)) {
+    return false
+  }
+
+  if (ai.customer_stage !== "won" && ai.closed_sale !== true) {
+    return false
+  }
+
+  fields.status = "Open"
+  fields.stage = "Closing"
+  fields.ai_summary =
+    "ลูกค้าแจ้งว่าโอนแล้ว แต่ยังไม่ได้ส่งสลิป รอตรวจสอบหลักฐานการชำระเงิน"
+
+  await notifyAiReviewRequired(
+    env,
+    contact,
+    ai,
+    "Customer claimed payment by text but no slip image was provided"
+  )
+
+  console.log("CUSTOMER CLAIMED PAYMENT BY TEXT - WAITING FOR SLIP")
+
+  return true
+}
+
 function buildNewDealFields(contact, ai, now) {
   const productName = getProductName(contact, ai)
+
+  const isLost = ai.customer_stage === "lost"
 
   return {
     deal_id: crypto.randomUUID(),
@@ -123,16 +135,11 @@ function buildNewDealFields(contact, ai, now) {
 
     deal_name: `Deal ${contact.fields.sender_id}`,
 
-    stage: mapStage(ai),
+    stage: isPaymentSlip(ai) ? "Closing" : mapStage(ai),
 
     lead_score: calculateLeadScore(ai),
 
-    status:
-      ai.customer_stage === "won"
-        ? "Won"
-        : ai.customer_stage === "lost"
-          ? "Lost"
-          : "Open",
+    status: isLost ? "Lost" : "Open",
 
     ai_summary: ai.summary,
 
@@ -144,7 +151,7 @@ function buildNewDealFields(contact, ai, now) {
 
     updated_at: now,
 
-    closed_at: isClosed(ai) ? now : "",
+    closed_at: isLost ? now : "",
 
     ...(ai.intent === "delivery_address"
       ? parseContactInfo(contact.fields.last_message)
@@ -175,27 +182,22 @@ export async function syncDeal(env, contact, ai) {
       return
     }
 
-    if (ai.customer_stage === "won") {
-      console.log("CUSTOMER CLAIMED PAYMENT BY TEXT - WAITING FOR SLIP")
-
-      fields.status = "Open"
-      fields.stage = "Closing"
-      fields.ai_summary =
-        "ลูกค้าแจ้งว่าโอนแล้ว แต่ยังไม่ได้ส่งสลิป รอตรวจสอบหลักฐานการชำระเงิน"
-
-      await notifyAiReviewRequired(
-        env,
-        contact,
-        ai,
-        "Customer claimed payment by text but no slip image was provided"
-      )
-    }
+    const claimedPaymentHandled = await handleClaimedPaymentByText(
+      env,
+      contact,
+      ai,
+      fields
+    )
 
     if (ai.customer_stage === "lost") {
       await closeDealAsLost(env, contact, fields, now)
     }
 
     await updateDeal(env, activeDealId, fields)
+
+    if (claimedPaymentHandled) {
+      console.log("DEAL KEPT OPEN AFTER TEXT PAYMENT CLAIM")
+    }
 
     console.log("DEAL UPDATED")
 

@@ -88,6 +88,7 @@ async function handleDeliveryAddress(env, contact, ai) {
     await closeDealAfterPayment(env, contact, contact.fields.active_deal_id)
 
     contact.fields.payment_completed_from_pending = true
+    contact.fields.current_stage = "Won"
 
     console.log("PENDING PAYMENT COMPLETED AFTER ADDRESS")
   }
