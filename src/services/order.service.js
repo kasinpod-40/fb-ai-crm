@@ -50,7 +50,7 @@ function buildOrderFields(contact, now) {
 
     invoice_pdf_url: "",
 
-    sales_owner: contact.fields.sales_owner || ""
+    sales_owner: contact.fields.sales_owner || "Unassigned"
   }
 }
 
@@ -63,7 +63,7 @@ export async function createOrderFromContact(env, contact) {
 
   if (activeOrderId) {
     console.log("ACTIVE ORDER EXISTS")
-    return
+    return activeOrderId
   }
 
   const now = getNow()
@@ -92,6 +92,8 @@ export async function createOrderFromContact(env, contact) {
   }
 
   console.log("ORDER CREATED")
+
+  return orderRecordId
 }
 
 export async function markOrderPaid(env, orderRecordId) {
@@ -107,6 +109,8 @@ export async function markOrderPaid(env, orderRecordId) {
   })
 
   console.log("ORDER PAID")
+
+  return true
 }
 
 export async function markActiveOrderPaid(env, contact) {
@@ -116,10 +120,12 @@ export async function markActiveOrderPaid(env, contact) {
 
   if (!orderId) {
     console.log("NO ACTIVE ORDER TO MARK PAID")
-    return
+    return false
   }
 
   await markOrderPaid(env, orderId)
+
+  return true
 }
 
 export async function cancelActiveOrder(env, contact) {
@@ -127,7 +133,7 @@ export async function cancelActiveOrder(env, contact) {
 
   if (!orderId) {
     console.log("NO ACTIVE ORDER TO CANCEL")
-    return
+    return false
   }
 
   const now = getNow()
@@ -138,18 +144,20 @@ export async function cancelActiveOrder(env, contact) {
   })
 
   console.log("ORDER CANCELLED")
+
+  return true
 }
 
 export async function updateProductFromImage(env, contact, productName) {
   if (!productName) {
-    return
+    return false
   }
 
   const orderId = contact.fields.active_order_id
 
   if (!orderId) {
     console.log("NO ACTIVE ORDER FOR PRODUCT")
-    return
+    return false
   }
 
   await updateOrder(env, orderId, {
@@ -158,29 +166,6 @@ export async function updateProductFromImage(env, contact, productName) {
   })
 
   console.log("ORDER PRODUCT UPDATED:", productName)
-}
 
-export async function updateOrderFromSlip(env, contact, imageAI) {
-  const orderId = contact.fields.active_order_id
-
-  if (!orderId) {
-    console.log("NO ACTIVE ORDER FOR SLIP")
-    return
-  }
-
-  const now = getNow()
-
-  await updateOrder(env, orderId, {
-    total_amount: imageAI.slip_amount || 0,
-    slip_amount: imageAI.slip_amount || 0,
-    slip_bank: imageAI.slip_bank || "",
-    slip_time: imageAI.slip_time || "",
-    slip_image_url: imageAI.image_url || "",
-    payment_status: "Paid",
-    order_status: "Completed",
-    paid_at: now,
-    updated_at: now
-  })
-
-  console.log("ORDER UPDATED FROM SLIP")
+  return true
 }

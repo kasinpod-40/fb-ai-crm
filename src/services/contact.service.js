@@ -10,6 +10,11 @@ import { parseContactInfo } from "./contact-parser"
 
 import { createOrderFromContact } from "./order.service"
 
+import {
+  applyPendingPaymentToOrder,
+  closeDealAfterPayment
+} from "./payment.service"
+
 import { notifyNewLead, notifyHotLead } from "./notification.service"
 
 function isHotLead(ai, fields) {
@@ -62,6 +67,32 @@ function buildContactFields(
   return fields
 }
 
+async function handleDeliveryAddress(env, contact, ai) {
+  if (ai.intent !== "delivery_address") {
+    return
+  }
+
+  const orderRecordId = await createOrderFromContact(env, contact)
+
+  if (orderRecordId) {
+    contact.fields.active_order_id = orderRecordId
+  }
+
+  const paymentApplied = await applyPendingPaymentToOrder(
+    env,
+    contact,
+    orderRecordId
+  )
+
+  if (paymentApplied) {
+    await closeDealAfterPayment(env, contact, contact.fields.active_deal_id)
+
+    contact.fields.payment_completed_from_pending = true
+
+    console.log("PENDING PAYMENT COMPLETED AFTER ADDRESS")
+  }
+}
+
 export async function syncContact(env, senderId, pageId, message, ai) {
   const now = new Date().toISOString()
 
@@ -94,9 +125,7 @@ export async function syncContact(env, senderId, pageId, message, ai) {
       await notifyHotLead(env, updatedContact)
     }
 
-    if (ai.intent === "delivery_address") {
-      await createOrderFromContact(env, updatedContact)
-    }
+    await handleDeliveryAddress(env, updatedContact, ai)
 
     return updatedContact
   }
@@ -117,9 +146,7 @@ export async function syncContact(env, senderId, pageId, message, ai) {
     await notifyHotLead(env, createdContact)
   }
 
-  if (ai.intent === "delivery_address") {
-    await createOrderFromContact(env, createdContact)
-  }
+  await handleDeliveryAddress(env, createdContact, ai)
 
   return createdContact
 }

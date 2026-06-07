@@ -12,11 +12,16 @@ import { parseContactInfo } from "./contact-parser"
 import {
   cancelActiveOrder,
   markActiveOrderPaid,
-  updateProductFromImage,
-  updateOrderFromSlip
+  updateProductFromImage
 } from "./order.service"
 
-import { notifyPaymentReceived } from "./notification.service"
+import {
+  applySlipToActiveOrder,
+  savePendingPayment,
+  closeDealAfterPayment
+} from "./payment.service"
+
+import { notifyAiReviewRequired } from "./notification.service"
 
 function getProductName(contact, ai) {
   return ai.image_ai?.product_name || contact.fields.product_name || ""
@@ -49,20 +54,23 @@ function buildDealUpdateFields(contact, ai, now) {
 
 async function closeDealAsWon(env, contact, fields, now) {
   fields.status = "Won"
+  fields.stage = "Won"
   fields.closed_at = now
 
-  await markActiveOrderPaid(env, contact)
+  const orderPaid = await markActiveOrderPaid(env, contact)
 
   await updateActiveDeal(env, contact.record_id, "")
   await updateActiveOrder(env, contact.record_id, "")
 
-  console.log("ORDER PAID")
+  console.log("DEAL CLOSED AS WON")
+  console.log("ORDER PAID:", orderPaid)
   console.log("ACTIVE DEAL CLEARED")
   console.log("ACTIVE ORDER CLEARED")
 }
 
 async function closeDealAsLost(env, contact, fields, now) {
   fields.status = "Lost"
+  fields.stage = "Lost"
   fields.closed_at = now
 
   await cancelActiveOrder(env, contact)
@@ -70,6 +78,7 @@ async function closeDealAsLost(env, contact, fields, now) {
   await updateActiveDeal(env, contact.record_id, "")
   await updateActiveOrder(env, contact.record_id, "")
 
+  console.log("DEAL CLOSED AS LOST")
   console.log("ACTIVE DEAL CLEARED")
   console.log("ACTIVE ORDER CLEARED")
 }
@@ -82,25 +91,24 @@ async function handleProductImage(env, contact, ai) {
   }
 }
 
-async function handlePaymentSlip(env, contact, ai, fields, now) {
+async function handlePaymentSlip(env, contact, ai, activeDealId) {
   if (ai.image_ai?.image_type !== "payment_slip") {
     return false
   }
 
-  await updateOrderFromSlip(env, contact, ai.image_ai)
+  const paymentApplied = await applySlipToActiveOrder(env, contact, ai.image_ai)
 
-  fields.status = "Won"
-  fields.closed_at = now
+  if (paymentApplied) {
+    await closeDealAfterPayment(env, contact, activeDealId)
 
-  await notifyPaymentReceived(env, contact, ai.image_ai)
+    console.log("PAYMENT SLIP HANDLED WITH ACTIVE ORDER")
 
-  await updateActiveDeal(env, contact.record_id, "")
-  await updateActiveOrder(env, contact.record_id, "")
+    return true
+  }
 
-  console.log("SLIP DETECTED")
-  console.log("PAYMENT NOTIFICATION SENT")
-  console.log("ACTIVE DEAL CLEARED")
-  console.log("ACTIVE ORDER CLEARED")
+  await savePendingPayment(env, contact, ai.image_ai)
+
+  console.log("PAYMENT SLIP SAVED AS PENDING")
 
   return true
 }
@@ -130,6 +138,8 @@ function buildNewDealFields(contact, ai, now) {
 
     product_name: productName,
 
+    sales_owner: contact.fields.sales_owner || "Unassigned",
+
     created_at: now,
 
     updated_at: now,
@@ -154,13 +164,34 @@ export async function syncDeal(env, contact, ai) {
 
     await handleProductImage(env, contact, ai)
 
-    const slipHandled = await handlePaymentSlip(env, contact, ai, fields, now)
+    const paymentHandled = await handlePaymentSlip(
+      env,
+      contact,
+      ai,
+      activeDealId
+    )
 
-    if (!slipHandled && ai.customer_stage === "won") {
-      await closeDealAsWon(env, contact, fields, now)
+    if (paymentHandled) {
+      return
     }
 
-    if (!slipHandled && ai.customer_stage === "lost") {
+    if (ai.customer_stage === "won") {
+      console.log("CUSTOMER CLAIMED PAYMENT BY TEXT - WAITING FOR SLIP")
+
+      fields.status = "Open"
+      fields.stage = "Closing"
+      fields.ai_summary =
+        "ลูกค้าแจ้งว่าโอนแล้ว แต่ยังไม่ได้ส่งสลิป รอตรวจสอบหลักฐานการชำระเงิน"
+
+      await notifyAiReviewRequired(
+        env,
+        contact,
+        ai,
+        "Customer claimed payment by text but no slip image was provided"
+      )
+    }
+
+    if (ai.customer_stage === "lost") {
       await closeDealAsLost(env, contact, fields, now)
     }
 

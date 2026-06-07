@@ -8,7 +8,7 @@ async function sendLarkNotification(env, title, lines = []) {
     return
   }
 
-  const text = [`${title}`, ...lines.filter(Boolean)].join("\n")
+  const text = [title, ...lines.filter(Boolean)].join("\n")
 
   try {
     const res = await fetch(env.LARK_BOT_WEBHOOK_URL, {
@@ -41,7 +41,8 @@ function formatContact(contact) {
 
   return [
     `👤 Customer: ${fields.sender_id || "-"}`,
-    `📄 Stage: ${fields.current_stage || "-"}`,
+    `📄 Page: ${fields.page_id || "-"}`,
+    `🧭 Stage: ${fields.current_stage || "-"}`,
     `🎯 Lead Score: ${fields.lead_score || 0}`,
     `💬 Messages: ${fields.message_count || 0}`,
     `📝 Summary: ${fields.ai_summary || "-"}`
@@ -60,24 +61,47 @@ export async function notifyPaymentReceived(env, contact, imageAI = {}) {
   const fields = contact?.fields || {}
 
   await sendLarkNotification(env, "💰 Payment Received", [
-    `Sender ID: ${fields.sender_id || "-"}`,
-    `Amount: ${imageAI.slip_amount || 0}`,
-    `Bank: ${imageAI.slip_bank || "-"}`,
-    `Time: ${imageAI.slip_time || "-"}`,
-    `Summary: ${imageAI.summary || fields.ai_summary || "-"}`
+    `👤 Customer: ${fields.sender_id || "-"}`,
+    `📄 Page: ${fields.page_id || "-"}`,
+    `💵 Amount: ${imageAI.slip_amount || 0}`,
+    `🏦 Bank: ${imageAI.slip_bank || "-"}`,
+    `🕒 Time: ${imageAI.slip_time || "-"}`,
+    `📝 Summary: ${imageAI.summary || fields.ai_summary || "-"}`
   ])
+}
+
+export async function notifyPaymentSlipNoActiveOrder(
+  env,
+  contact,
+  imageAI = {}
+) {
+  const fields = contact?.fields || {}
+
+  await sendLarkNotification(
+    env,
+    "⚠️ Payment Slip Received But No Active Order",
+    [
+      `👤 Customer: ${fields.sender_id || "-"}`,
+      `📄 Page: ${fields.page_id || "-"}`,
+      `💵 Amount: ${imageAI.slip_amount || 0}`,
+      `🏦 Bank: ${imageAI.slip_bank || "-"}`,
+      `🕒 Time: ${imageAI.slip_time || "-"}`,
+      `🧾 Status: เก็บสลิปไว้ใน Contact แล้ว`,
+      `➡️ Action: รอลูกค้าส่งที่อยู่ แล้วระบบจะสร้าง Order และปิด Paid อัตโนมัติ`
+    ]
+  )
 }
 
 export async function notifyAiReviewRequired(env, contact, ai, reason) {
   const fields = contact?.fields || {}
 
   await sendLarkNotification(env, "⚠️ AI Review Required", [
-    `Reason: ${reason}`,
-    `Sender ID: ${fields.sender_id || "-"}`,
-    `Page ID: ${fields.page_id || "-"}`,
-    `Intent: ${ai?.intent || "-"}`,
-    `Stage: ${ai?.customer_stage || "-"}`,
-    `Summary: ${ai?.summary || "-"}`
+    `❗ Reason: ${reason}`,
+    `👤 Customer: ${fields.sender_id || "-"}`,
+    `📄 Page: ${fields.page_id || "-"}`,
+    `🧠 Intent: ${ai?.intent || "-"}`,
+    `🧭 Stage: ${ai?.customer_stage || "-"}`,
+    `📝 Summary: ${ai?.summary || "-"}`
   ])
 }
 

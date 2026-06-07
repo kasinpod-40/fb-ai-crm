@@ -1,0 +1,168 @@
+import {
+  updateContact,
+  updateActiveDeal,
+  updateActiveOrder
+} from "../repositories/contact.repository"
+
+import { updateDeal } from "../repositories/deal.repository"
+
+import { updateOrder } from "../repositories/order.repository"
+
+import {
+  notifyPaymentReceived,
+  notifyPaymentSlipNoActiveOrder
+} from "./notification.service"
+
+function getNow() {
+  return new Date().toISOString()
+}
+
+function buildPendingSlipFields(imageAI) {
+  return {
+    pending_payment: true,
+    pending_slip_amount: imageAI.slip_amount || 0,
+    pending_slip_bank: imageAI.slip_bank || "",
+    pending_slip_time: imageAI.slip_time || "",
+    pending_slip_image_url: imageAI.image_url || ""
+  }
+}
+
+function buildPaymentFieldsFromImageAI(imageAI, now) {
+  return {
+    total_amount: imageAI.slip_amount || 0,
+    slip_amount: imageAI.slip_amount || 0,
+    slip_bank: imageAI.slip_bank || "",
+    slip_time: imageAI.slip_time || "",
+    slip_image_url: imageAI.image_url || "",
+    payment_status: "Paid",
+    order_status: "Completed",
+    paid_at: now,
+    updated_at: now
+  }
+}
+
+function buildPaymentFieldsFromPending(contact, now) {
+  return {
+    total_amount: contact.fields.pending_slip_amount || 0,
+    slip_amount: contact.fields.pending_slip_amount || 0,
+    slip_bank: contact.fields.pending_slip_bank || "",
+    slip_time: contact.fields.pending_slip_time || "",
+    slip_image_url: contact.fields.pending_slip_image_url || "",
+    payment_status: "Paid",
+    order_status: "Completed",
+    paid_at: now,
+    updated_at: now
+  }
+}
+
+function buildPendingImageAI(contact) {
+  return {
+    slip_amount: contact.fields.pending_slip_amount || 0,
+    slip_bank: contact.fields.pending_slip_bank || "",
+    slip_time: contact.fields.pending_slip_time || "",
+    image_url: contact.fields.pending_slip_image_url || "",
+    summary: "ระบบนำสลิปที่ค้างไว้ไปชำระ Order แล้ว"
+  }
+}
+
+async function clearPendingPayment(env, contact) {
+  await updateContact(env, contact.record_id, {
+    pending_payment: false,
+    pending_slip_amount: 0,
+    pending_slip_bank: "",
+    pending_slip_time: "",
+    pending_slip_image_url: ""
+  })
+
+  contact.fields.pending_payment = false
+  contact.fields.pending_slip_amount = 0
+  contact.fields.pending_slip_bank = ""
+  contact.fields.pending_slip_time = ""
+  contact.fields.pending_slip_image_url = ""
+
+  console.log("PENDING PAYMENT CLEARED")
+}
+
+export async function savePendingPayment(env, contact, imageAI) {
+  await updateContact(env, contact.record_id, buildPendingSlipFields(imageAI))
+
+  contact.fields.pending_payment = true
+  contact.fields.pending_slip_amount = imageAI.slip_amount || 0
+  contact.fields.pending_slip_bank = imageAI.slip_bank || ""
+  contact.fields.pending_slip_time = imageAI.slip_time || ""
+  contact.fields.pending_slip_image_url = imageAI.image_url || ""
+
+  await notifyPaymentSlipNoActiveOrder(env, contact, imageAI)
+
+  console.log("PENDING PAYMENT SAVED")
+}
+
+export async function applySlipToActiveOrder(env, contact, imageAI) {
+  const orderId = contact.fields.active_order_id
+
+  if (!orderId) {
+    console.log("NO ACTIVE ORDER FOR SLIP")
+    return false
+  }
+
+  const now = getNow()
+
+  await updateOrder(env, orderId, buildPaymentFieldsFromImageAI(imageAI, now))
+
+  await notifyPaymentReceived(env, contact, imageAI)
+
+  console.log("SLIP APPLIED TO ACTIVE ORDER")
+
+  return true
+}
+
+export async function applyPendingPaymentToOrder(env, contact, orderRecordId) {
+  if (!contact.fields.pending_payment) {
+    console.log("NO PENDING PAYMENT")
+    return false
+  }
+
+  if (!orderRecordId) {
+    console.log("NO ORDER RECORD ID FOR PENDING PAYMENT")
+    return false
+  }
+
+  const now = getNow()
+
+  await updateOrder(
+    env,
+    orderRecordId,
+    buildPaymentFieldsFromPending(contact, now)
+  )
+
+  const imageAI = buildPendingImageAI(contact)
+
+  await notifyPaymentReceived(env, contact, imageAI)
+
+  await clearPendingPayment(env, contact)
+
+  console.log("PENDING PAYMENT APPLIED TO ORDER")
+
+  return true
+}
+
+export async function closeDealAfterPayment(env, contact, dealRecordId) {
+  if (!dealRecordId) {
+    console.log("NO DEAL TO CLOSE AFTER PAYMENT")
+    return
+  }
+
+  const now = getNow()
+
+  await updateDeal(env, dealRecordId, {
+    status: "Won",
+    stage: "Won",
+    closed_at: now,
+    updated_at: now
+  })
+
+  await updateActiveDeal(env, contact.record_id, "")
+  await updateActiveOrder(env, contact.record_id, "")
+
+  console.log("DEAL CLOSED AFTER PAYMENT")
+}
