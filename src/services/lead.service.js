@@ -14,6 +14,8 @@ import {
   notifyAiReviewRequired
 } from "./notification.service"
 
+import { getNow } from "../utils/date"
+
 function buildImageAIResult(imageAI, imageUrl) {
   const isPaymentSlip = imageAI.image_type === "payment_slip"
 
@@ -128,14 +130,14 @@ export async function processLead(
     ai_summary: ai.summary,
 
     image_type: ai.image_ai?.image_type || "",
-    product_name: ai.image_ai?.product_name || "",
+    product_name: ai.product_name || ai.image_ai?.product_name || "",
     slip_amount: ai.image_ai?.slip_amount || 0,
     slip_bank: ai.image_ai?.slip_bank || "",
     slip_time: ai.image_ai?.slip_time || "",
     image_confidence: ai.image_ai?.confidence || 0,
 
     timestamp,
-    created_at: new Date().toISOString()
+    created_at: getNow()
   })
 
   console.log("MESSAGE SAVED")

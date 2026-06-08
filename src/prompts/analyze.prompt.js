@@ -6,6 +6,7 @@ export function buildAnalyzePrompt(message) {
 - วิเคราะห์เจตนาล่าสุดของลูกค้า
 - ประเมินระดับความสนใจ
 - ประเมิน Stage ของลูกค้าใน Sales Pipeline
+- ดึงชื่อสินค้า จำนวน และหน่วย ถ้ามี
 - สรุปข้อความเป็นภาษาไทยสั้น ๆ
 - ตอบกลับเป็น JSON เท่านั้น
 
@@ -23,6 +24,9 @@ export function buildAnalyzePrompt(message) {
 - ต้องเลือกค่าจากรายการที่กำหนดเท่านั้น
 - วิเคราะห์จากข้อความล่าสุดเป็นหลัก
 - ถ้าไม่มั่นใจ ให้ใช้ intent = "unknown"
+- ถ้าไม่มีสินค้า ให้ product_name = ""
+- ถ้าไม่มีจำนวน ให้ product_qty = 0
+- ถ้าไม่มีหน่วย ให้ product_unit = ""
 
 Schema:
 
@@ -32,6 +36,9 @@ Schema:
   "customer_stage": "",
   "hot_lead": false,
   "closed_sale": false,
+  "product_name": "",
+  "product_qty": 0,
+  "product_unit": "",
   "summary": ""
 }
 
@@ -63,6 +70,50 @@ negotiating
 closing
 won
 lost
+
+กฎดึงสินค้า:
+
+ถ้าลูกค้าระบุชื่อสินค้า ให้ใส่ product_name
+
+ตัวอย่าง:
+"เอาผักชีปลาวาฬ 1 ลังครับ"
+
+ผลลัพธ์:
+{
+  "product_name": "ผักชีปลาวาฬ",
+  "product_qty": 1,
+  "product_unit": "ลัง"
+}
+
+"ขอเมล็ดผักชีตราปลาวาฬ 2 ถุง"
+
+ผลลัพธ์:
+{
+  "product_name": "เมล็ดผักชีตราปลาวาฬ",
+  "product_qty": 2,
+  "product_unit": "ถุง"
+}
+
+"เอา 3 กิโลครับ"
+
+ถ้าไม่รู้ชื่อสินค้า ให้:
+{
+  "product_name": "",
+  "product_qty": 3,
+  "product_unit": "กิโล"
+}
+
+หน่วยที่เป็นไปได้ เช่น:
+ลัง
+ถุง
+กล่อง
+แพ็ค
+ชิ้น
+กิโล
+กิโลกรัม
+กรัม
+ขวด
+กระสอบ
 
 กฎแยก intent:
 
@@ -168,6 +219,7 @@ lost
 - ขอรูปเพิ่ม
 - สอบถามรายละเอียดสินค้า
 - พร้อมส่งไหม
+- ลูกค้าระบุว่าสนใจหรือจะเอาสินค้า
 
 ผลลัพธ์:
 {
@@ -177,6 +229,9 @@ lost
   "hot_lead": false,
   "closed_sale": false
 }
+
+ถ้าลูกค้าพูดว่า "เอา", "รับ", "สั่ง", "ขอ" พร้อมชื่อสินค้าและจำนวน
+ให้ถือเป็น product_info และ interest_level = high
 
 7. delivery_address
 
@@ -210,15 +265,16 @@ lost
 {
   "intent": "closed_sale",
   "interest_level": "high",
-  "customer_stage": "won",
+  "customer_stage": "closing",
   "hot_lead": true,
-  "closed_sale": true
+  "closed_sale": false
 }
 
 ข้อควรระวัง:
+- ลูกค้าพิมพ์ว่าโอนแล้ว ยังไม่ใช่ won
 - ลูกค้าขอเลขบัญชี ยังไม่ใช่ closed_sale
 - ลูกค้าส่งที่อยู่ ยังไม่ใช่ closed_sale
-- ต้องมีข้อความสื่อว่าชำระเงินแล้วเท่านั้น จึงเป็น closed_sale
+- ต้องมีสลิปจริงจากรูปภาพเท่านั้น ระบบจึงปิด Paid/Won ในขั้นตอน Payment Service
 
 9. lost
 
@@ -282,22 +338,25 @@ lost
 - ถ้าข้อความเข้าได้หลาย intent ให้เลือก intent ที่ใกล้การซื้อที่สุด
 - ลำดับความสำคัญจากสูงไปต่ำ:
   closed_sale > delivery_address > payment_request > ask_discount > delivery_question > product_info > ask_price > support > greeting > unknown
-- ห้ามให้ customer_stage = "won" ถ้ายังไม่มีการชำระเงินจริง
+- ห้ามให้ customer_stage = "won" จากข้อความอย่างเดียว
 - ถ้าลูกค้าขอเลขบัญชี ให้ถือเป็น payment_request
 - ถ้าลูกค้าส่งที่อยู่ ให้ถือเป็น delivery_address
-- ถ้าลูกค้าถามเรื่องสินค้า ให้ถือเป็น product_info
+- ถ้าลูกค้าถามหรือระบุชื่อสินค้า ให้ถือเป็น product_info
 - ถ้าลูกค้าถามเรื่องราคา ให้ถือเป็น ask_price
 - ถ้าลูกค้าต่อราคา ให้ถือเป็น ask_discount
 
 ตัวอย่าง output:
 
 {
-  "intent": "ask_price",
-  "interest_level": "medium",
+  "intent": "product_info",
+  "interest_level": "high",
   "customer_stage": "interested",
   "hot_lead": false,
   "closed_sale": false,
-  "summary": "ลูกค้าสอบถามราคา"
+  "product_name": "ผักชีปลาวาฬ",
+  "product_qty": 1,
+  "product_unit": "ลัง",
+  "summary": "ลูกค้าต้องการผักชีปลาวาฬ 1 ลัง"
 }
 `
 }

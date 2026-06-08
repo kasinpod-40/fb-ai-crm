@@ -10,12 +10,11 @@ import { parseContactInfo } from "./contact-parser"
 
 import { createOrderFromContact } from "./order.service"
 
-import {
-  applyPendingPaymentToOrder,
-  closeDealAfterPayment
-} from "./payment.service"
+import { applyPendingPaymentToOrder } from "./payment.service"
 
 import { notifyNewLead, notifyHotLead } from "./notification.service"
+
+import { getNow } from "../utils/date"
 
 function isHotLead(ai, fields) {
   return ai.hot_lead === true || Number(fields.lead_score || 0) >= 80
@@ -25,6 +24,24 @@ function wasAlreadyHot(contact) {
   return contact?.fields?.hot_lead === true
 }
 
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function buildContactFields(
   senderId,
   pageId,
@@ -32,7 +49,7 @@ function buildContactFields(
   ai,
   currentMessageCount
 ) {
-  const now = new Date().toISOString()
+  const now = getNow()
 
   const fields = {
     sender_id: senderId,
@@ -53,6 +70,19 @@ function buildContactFields(
     fields.delivery_name = contactInfo.delivery_name
     fields.delivery_phone = contactInfo.delivery_phone
     fields.delivery_address = contactInfo.delivery_address
+  }
+
+  if (ai.product_name) {
+    fields.product_name = ai.product_name
+    fields.product_source = "text"
+  }
+
+  if (ai.product_qty) {
+    fields.product_qty = toNumber(ai.product_qty)
+  }
+
+  if (ai.product_unit) {
+    fields.product_unit = ai.product_unit
   }
 
   if (ai.image_ai?.image_type === "product_image" && ai.image_ai.product_name) {
@@ -78,24 +108,19 @@ async function handleDeliveryAddress(env, contact, ai) {
     contact.fields.active_order_id = orderRecordId
   }
 
-  const paymentApplied = await applyPendingPaymentToOrder(
+  const paymentAttached = await applyPendingPaymentToOrder(
     env,
     contact,
     orderRecordId
   )
 
-  if (paymentApplied) {
-    await closeDealAfterPayment(env, contact, contact.fields.active_deal_id)
-
-    contact.fields.payment_completed_from_pending = true
-    contact.fields.current_stage = "Won"
-
-    console.log("PENDING PAYMENT COMPLETED AFTER ADDRESS")
+  if (paymentAttached) {
+    console.log("PENDING PAYMENT ATTACHED TO ORDER - WAITING FOR VERIFICATION")
   }
 }
 
 export async function syncContact(env, senderId, pageId, message, ai) {
-  const now = new Date().toISOString()
+  const now = getNow()
 
   const contact = await findContactBySenderId(env, senderId)
 

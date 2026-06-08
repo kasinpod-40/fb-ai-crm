@@ -9,8 +9,25 @@ import {
   notifyPaymentSlipNoActiveOrder
 } from "./notification.service"
 
-function getNow() {
-  return new Date().toISOString()
+import { getNow } from "../utils/date"
+
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function buildPendingSlipFields(imageAI) {
@@ -30,10 +47,11 @@ function buildPaymentFieldsFromImageAI(imageAI, now) {
     slip_bank: imageAI.slip_bank || "",
     slip_time: imageAI.slip_time || "",
     slip_image_url: imageAI.image_url || "",
-    payment_status: "Paid",
+
+    payment_status: "Pending",
     payment_verified: false,
-    order_status: "Completed",
-    paid_at: now,
+    order_status: "Payment Review",
+
     updated_at: now
   }
 }
@@ -45,10 +63,11 @@ function buildPaymentFieldsFromPending(contact, now) {
     slip_bank: contact.fields.pending_slip_bank || "",
     slip_time: contact.fields.pending_slip_time || "",
     slip_image_url: contact.fields.pending_slip_image_url || "",
-    payment_status: "Paid",
+
+    payment_status: "Pending",
     payment_verified: false,
-    order_status: "Completed",
-    paid_at: now,
+    order_status: "Payment Review",
+
     updated_at: now
   }
 }
@@ -59,7 +78,7 @@ function buildPendingImageAI(contact) {
     slip_bank: contact.fields.pending_slip_bank || "",
     slip_time: contact.fields.pending_slip_time || "",
     image_url: contact.fields.pending_slip_image_url || "",
-    summary: "ระบบนำสลิปที่ค้างไว้ไปชำระ Order แล้ว"
+    summary: "ระบบแนบสลิปเข้ากับ Order แล้ว รอ Sales ตรวจสอบยอด"
   }
 }
 
@@ -107,9 +126,12 @@ export async function applySlipToActiveOrder(env, contact, imageAI) {
 
   await updateOrder(env, orderId, buildPaymentFieldsFromImageAI(imageAI, now))
 
-  await notifyPaymentReceived(env, contact, imageAI)
+  await notifyPaymentReceived(env, contact, {
+    ...imageAI,
+    summary: "ได้รับสลิปแล้ว รอ Sales ตรวจสอบยอด"
+  })
 
-  console.log("SLIP APPLIED TO ACTIVE ORDER")
+  console.log("SLIP ATTACHED TO ACTIVE ORDER - WAITING FOR VERIFICATION")
 
   return true
 }
@@ -139,7 +161,7 @@ export async function applyPendingPaymentToOrder(env, contact, orderRecordId) {
 
   await clearPendingPayment(env, contact)
 
-  console.log("PENDING PAYMENT APPLIED TO ORDER")
+  console.log("PENDING PAYMENT ATTACHED TO ORDER - WAITING FOR VERIFICATION")
 
   return true
 }
@@ -164,29 +186,8 @@ export async function closeDealAfterPayment(env, contact, dealRecordId) {
     active_order_id: "",
     current_stage: "Won",
     hot_lead: true,
-    ai_summary: "ลูกค้าชำระเงินแล้ว ระบบปิดการขายสำเร็จ"
+    ai_summary: "Sales ยืนยันการชำระเงินแล้ว ระบบปิดการขายสำเร็จ"
   })
 
-  // await updateActiveDeal(env, contact.record_id, "")
-  // await updateActiveOrder(env, contact.record_id, "")
-
-  console.log("DEAL CLOSED AFTER PAYMENT")
-}
-
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") {
-    return 0
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0
-  }
-
-  const cleaned = String(value)
-    .replace(/,/g, "")
-    .replace(/[^\d.]/g, "")
-
-  const parsed = Number(cleaned)
-
-  return Number.isFinite(parsed) ? parsed : 0
+  console.log("DEAL CLOSED AFTER PAYMENT VERIFIED")
 }

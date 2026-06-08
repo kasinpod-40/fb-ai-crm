@@ -2,10 +2,23 @@ import { createOrder, updateOrder } from "../repositories/order.repository"
 
 import { updateActiveOrder } from "../repositories/contact.repository"
 
-import { generateInvoiceNumber } from "../utils/invoice"
+import {
+  generateInvoiceNumber,
+  generateQuotationNumber
+} from "../utils/invoice"
 
-function getNow() {
-  return new Date().toISOString()
+import { getNow } from "../utils/date"
+
+function generateOrderNumber() {
+  const now = new Date()
+
+  const yy = String(now.getFullYear()).slice(-2)
+  const mm = String(now.getMonth() + 1).padStart(2, "0")
+  const dd = String(now.getDate()).padStart(2, "0")
+
+  const random = Math.floor(Math.random() * 9000) + 1000
+
+  return `ORD-${yy}${mm}${dd}-${random}`
 }
 
 function getInvoiceUrl(env, orderRecordId) {
@@ -16,9 +29,19 @@ function getInvoiceUrl(env, orderRecordId) {
   return `${env.PUBLIC_BASE_URL}/invoice/${orderRecordId}`
 }
 
+function getQuotationUrl(env, orderRecordId) {
+  if (!env.PUBLIC_BASE_URL) {
+    return ""
+  }
+
+  return `${env.PUBLIC_BASE_URL}/quotation/${orderRecordId}`
+}
+
 function buildOrderFields(contact, now) {
   return {
     order_id: crypto.randomUUID(),
+
+    order_number: generateOrderNumber(),
 
     sender_id: contact.fields.sender_id,
 
@@ -36,9 +59,13 @@ function buildOrderFields(contact, now) {
 
     payment_status: "Pending",
 
+    payment_verified: false,
+
     total_amount: 0,
 
     invoice_number: generateInvoiceNumber(),
+
+    quotation_number: generateQuotationNumber(),
 
     tracking_number: "",
 
@@ -48,10 +75,47 @@ function buildOrderFields(contact, now) {
 
     paid_at: "",
 
+    invoice_url: "",
+
+    quotation_url: "",
+
     invoice_pdf_url: "",
 
-    sales_owner: contact.fields.sales_owner || "Unassigned"
+    quotation_pdf_url: "",
+
+    sales_owner: contact.fields.sales_owner || "Unassigned",
+
+    product_qty: toNumber(contact.fields.product_qty),
+
+    product_unit: contact.fields.product_unit || ""
   }
+}
+
+async function saveDocumentUrls(env, orderRecordId, now) {
+  const invoiceUrl = getInvoiceUrl(env, orderRecordId)
+  const quotationUrl = getQuotationUrl(env, orderRecordId)
+
+  const fields = {
+    updated_at: now
+  }
+
+  if (invoiceUrl) {
+    fields.invoice_url = invoiceUrl
+  }
+
+  if (quotationUrl) {
+    fields.quotation_url = quotationUrl
+  }
+
+  if (!invoiceUrl && !quotationUrl) {
+    console.log("PUBLIC_BASE_URL NOT SET, SKIP DOCUMENT URL")
+    return
+  }
+
+  await updateOrder(env, orderRecordId, fields)
+
+  console.log("INVOICE URL SAVED:", invoiceUrl)
+  console.log("QUOTATION URL SAVED:", quotationUrl)
 }
 
 export async function createOrderFromContact(env, contact) {
@@ -78,18 +142,7 @@ export async function createOrderFromContact(env, contact) {
 
   console.log("ACTIVE ORDER SAVED TO CONTACT")
 
-  const invoiceUrl = getInvoiceUrl(env, orderRecordId)
-
-  if (invoiceUrl) {
-    await updateOrder(env, orderRecordId, {
-      invoice_pdf_url: invoiceUrl,
-      updated_at: now
-    })
-
-    console.log("INVOICE URL SAVED:", invoiceUrl)
-  } else {
-    console.log("PUBLIC_BASE_URL NOT SET, SKIP INVOICE URL")
-  }
+  await saveDocumentUrls(env, orderRecordId, now)
 
   console.log("ORDER CREATED")
 
@@ -103,6 +156,7 @@ export async function markOrderPaid(env, orderRecordId) {
 
   await updateOrder(env, orderRecordId, {
     payment_status: "Paid",
+    payment_verified: false,
     order_status: "Completed",
     paid_at: now,
     updated_at: now
@@ -168,4 +222,22 @@ export async function updateProductFromImage(env, contact, productName) {
   console.log("ORDER PRODUCT UPDATED:", productName)
 
   return true
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
 }

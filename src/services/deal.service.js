@@ -11,20 +11,41 @@ import { parseContactInfo } from "./contact-parser"
 
 import { cancelActiveOrder, updateProductFromImage } from "./order.service"
 
-import {
-  applySlipToActiveOrder,
-  savePendingPayment,
-  closeDealAfterPayment
-} from "./payment.service"
+import { applySlipToActiveOrder, savePendingPayment } from "./payment.service"
 
 import { notifyAiReviewRequired } from "./notification.service"
 
+import { getNow } from "../utils/date"
+
 function getProductName(contact, ai) {
-  return ai.image_ai?.product_name || contact.fields.product_name || ""
+  return (
+    ai.image_ai?.product_name ||
+    ai.product_name ||
+    contact.fields.product_name ||
+    ""
+  )
 }
 
 function isPaymentSlip(ai) {
   return ai.image_ai?.image_type === "payment_slip"
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const cleaned = String(value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "")
+
+  const parsed = Number(cleaned)
+
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function buildDealUpdateFields(contact, ai, now) {
@@ -39,6 +60,14 @@ function buildDealUpdateFields(contact, ai, now) {
 
   if (productName) {
     fields.product_name = productName
+  }
+
+  if (ai.product_qty) {
+    fields.product_qty = toNumber(ai.product_qty)
+  }
+
+  if (ai.product_unit) {
+    fields.product_unit = ai.product_unit
   }
 
   if (ai.intent === "delivery_address") {
@@ -75,17 +104,19 @@ async function handleProductImage(env, contact, ai) {
   }
 }
 
-async function handlePaymentSlip(env, contact, ai, activeDealId) {
+async function handlePaymentSlip(env, contact, ai) {
   if (!isPaymentSlip(ai)) {
     return false
   }
 
-  const paymentApplied = await applySlipToActiveOrder(env, contact, ai.image_ai)
+  const paymentAttached = await applySlipToActiveOrder(
+    env,
+    contact,
+    ai.image_ai
+  )
 
-  if (paymentApplied) {
-    await closeDealAfterPayment(env, contact, activeDealId)
-
-    console.log("PAYMENT SLIP HANDLED WITH ACTIVE ORDER")
+  if (paymentAttached) {
+    console.log("PAYMENT SLIP ATTACHED - WAITING FOR VERIFICATION")
 
     return true
   }
@@ -128,7 +159,7 @@ function buildNewDealFields(contact, ai, now) {
 
   const isLost = ai.customer_stage === "lost"
 
-  return {
+  const fields = {
     deal_id: crypto.randomUUID(),
 
     sender_id: contact.fields.sender_id,
@@ -157,10 +188,20 @@ function buildNewDealFields(contact, ai, now) {
       ? parseContactInfo(contact.fields.last_message)
       : {})
   }
+
+  if (ai.product_qty) {
+    fields.product_qty = toNumber(ai.product_qty)
+  }
+
+  if (ai.product_unit) {
+    fields.product_unit = ai.product_unit
+  }
+
+  return fields
 }
 
 export async function syncDeal(env, contact, ai) {
-  const now = new Date().toISOString()
+  const now = getNow()
 
   const activeDealId = contact?.fields?.active_deal_id
 
@@ -171,14 +212,23 @@ export async function syncDeal(env, contact, ai) {
 
     await handleProductImage(env, contact, ai)
 
-    const paymentHandled = await handlePaymentSlip(
-      env,
-      contact,
-      ai,
-      activeDealId
-    )
+    const paymentHandled = await handlePaymentSlip(env, contact, ai)
 
     if (paymentHandled) {
+      fields.stage = "Closing"
+      fields.status = "Open"
+
+      if (contact.fields.active_order_id) {
+        fields.ai_summary =
+          "ลูกค้าส่งสลิปแล้ว ระบบแนบสลิปเข้า Order แล้ว รอ Sales ตรวจสอบยอดชำระเงิน"
+      } else {
+        fields.ai_summary =
+          "ลูกค้าส่งสลิปแล้ว แต่ยังไม่มี Order ระบบเก็บสลิปไว้ รอลูกค้าส่งที่อยู่"
+      }
+
+      await updateDeal(env, activeDealId, fields)
+
+      console.log("DEAL UPDATED AFTER PAYMENT SLIP")
       return
     }
 
@@ -207,6 +257,10 @@ export async function syncDeal(env, contact, ai) {
   const result = await createDeal(env, buildNewDealFields(contact, ai, now))
 
   const recordId = result.record.record_id
+
+  await updateDeal(env, recordId, {
+    record_id: recordId
+  })
 
   await updateActiveDeal(env, contact.record_id, recordId)
 

@@ -163,6 +163,20 @@ export function analyzeByRule(message) {
     }
   }
 
+  const productInfo = extractProductInfo(text)
+
+  if (productInfo) {
+    return {
+      intent: "product_info",
+      interest_level: "high",
+      customer_stage: "interested",
+      hot_lead: true,
+      closed_sale: false,
+      ...productInfo,
+      summary: `ลูกค้าต้องการ${productInfo.product_name} ${productInfo.product_qty} ${productInfo.product_unit}`
+    }
+  }
+
   for (const [intent, keywords] of Object.entries(RULES)) {
     if (match(text, keywords)) {
       return buildResult(intent)
@@ -170,4 +184,47 @@ export function analyzeByRule(message) {
   }
 
   return null
+}
+
+function extractProductInfo(text) {
+  const units = [
+    "ลัง",
+    "ถุง",
+    "กล่อง",
+    "แพ็ค",
+    "ชิ้น",
+    "กิโล",
+    "กิโลกรัม",
+    "กรัม",
+    "ขวด",
+    "กระสอบ"
+  ]
+
+  const unitPattern = units.join("|")
+
+  const pattern = new RegExp(
+    `(?:เอา|ขอ|รับ|สั่ง)?\\s*(.+?)\\s*(\\d+)\\s*(${unitPattern})`,
+    "i"
+  )
+
+  const matchResult = text.match(pattern)
+
+  if (!matchResult) {
+    return null
+  }
+
+  const rawName = matchResult[1].replace(/ครับ|ค่ะ|คะ|จ้า|หน่อย/g, "").trim()
+
+  const qty = Number(matchResult[2] || 0)
+  const unit = matchResult[3] || ""
+
+  if (!rawName || !qty || !unit) {
+    return null
+  }
+
+  return {
+    product_name: rawName,
+    product_qty: qty,
+    product_unit: unit
+  }
 }

@@ -1,9 +1,27 @@
 import { handleWebhook } from "./routes/webhook"
-import { renderInvoicePage } from "./services/invoice.service"
+
+import {
+  renderInvoicePage,
+  renderQuotationPage
+} from "./services/invoice.service"
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
+
+    // QUOTATION PAGE
+    // ต้องอยู่ก่อน VERIFY WEBHOOK
+    if (request.method === "GET" && url.pathname.startsWith("/quotation/")) {
+      const orderId = url.pathname.split("/quotation/")[1]
+
+      if (!orderId) {
+        return new Response("Missing order id", {
+          status: 400
+        })
+      }
+
+      return renderQuotationPage(request, env, orderId)
+    }
 
     // INVOICE PAGE
     // ต้องอยู่ก่อน VERIFY WEBHOOK
