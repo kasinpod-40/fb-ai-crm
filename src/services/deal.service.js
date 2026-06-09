@@ -15,13 +15,12 @@ import { applySlipToActiveOrder, savePendingPayment } from "./payment.service"
 
 import { notifyAiReviewRequired } from "./notification.service"
 
-import { getNow } from "../utils/date"
+import { getNowIso, getNowText } from "../utils/date"
 
 function getProductName(contact, ai) {
   return (
     ai.image_ai?.product_name ||
     ai.product_name ||
-    contact.fields.product_name ||
     ""
   )
 }
@@ -48,14 +47,15 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function buildDealUpdateFields(contact, ai, now) {
+function buildDealUpdateFields(contact, ai, nowIso, nowText) {
   const productName = getProductName(contact, ai)
 
   const fields = {
     stage: mapStage(ai),
     lead_score: calculateLeadScore(ai),
     ai_summary: ai.summary,
-    updated_at: now
+    updated_at: nowIso,
+    updated_at_text: nowText
   }
 
   if (productName) {
@@ -81,10 +81,11 @@ function buildDealUpdateFields(contact, ai, now) {
   return fields
 }
 
-async function closeDealAsLost(env, contact, fields, now) {
+async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
   fields.status = "Lost"
   fields.stage = "Lost"
-  fields.closed_at = now
+  fields.closed_at = nowIso,
+  fields.closed_at_text = nowText
 
   await cancelActiveOrder(env, contact)
 
@@ -154,7 +155,7 @@ async function handleClaimedPaymentByText(env, contact, ai, fields) {
   return true
 }
 
-function buildNewDealFields(contact, ai, now) {
+function buildNewDealFields(contact, ai, nowIso, nowText) {
   const productName = getProductName(contact, ai)
 
   const isLost = ai.customer_stage === "lost"
@@ -178,11 +179,17 @@ function buildNewDealFields(contact, ai, now) {
 
     sales_owner: contact.fields.sales_owner || "Unassigned",
 
-    created_at: now,
+    created_at: nowIso,
 
-    updated_at: now,
+    created_at_text: nowText,
 
-    closed_at: isLost ? now : "",
+    updated_at: nowIso,
+
+    updated_at_text: nowText,
+
+    closed_at: isLost ? nowIso : "",
+
+    closed_at_text: isLost ? nowText : "",
 
     ...(ai.intent === "delivery_address"
       ? parseContactInfo(contact.fields.last_message)
@@ -201,14 +208,15 @@ function buildNewDealFields(contact, ai, now) {
 }
 
 export async function syncDeal(env, contact, ai) {
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   const activeDealId = contact?.fields?.active_deal_id
 
   console.log("ACTIVE DEAL:", activeDealId)
 
   if (activeDealId) {
-    const fields = buildDealUpdateFields(contact, ai, now)
+    const fields = buildDealUpdateFields(contact, ai, nowIso, nowText)
 
     await handleProductImage(env, contact, ai)
 
@@ -240,7 +248,7 @@ export async function syncDeal(env, contact, ai) {
     )
 
     if (ai.customer_stage === "lost") {
-      await closeDealAsLost(env, contact, fields, now)
+      await closeDealAsLost(env, contact, fields, nowIso, nowText)
     }
 
     await updateDeal(env, activeDealId, fields)
@@ -254,7 +262,7 @@ export async function syncDeal(env, contact, ai) {
     return
   }
 
-  const result = await createDeal(env, buildNewDealFields(contact, ai, now))
+  const result = await createDeal(env, buildNewDealFields(contact, ai, nowIso, nowText))
 
   const recordId = result.record.record_id
 

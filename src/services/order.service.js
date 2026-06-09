@@ -7,7 +7,7 @@ import {
   generateQuotationNumber
 } from "../utils/invoice"
 
-import { getNow } from "../utils/date"
+import { getNowIso, getNowText } from "../utils/date"
 
 function generateOrderNumber() {
   const now = new Date()
@@ -37,7 +37,7 @@ function getQuotationUrl(env, orderRecordId) {
   return `${env.PUBLIC_BASE_URL}/quotation/${orderRecordId}`
 }
 
-function buildOrderFields(contact, now) {
+function buildOrderFields(contact, nowIso, nowText) {
   return {
     order_id: crypto.randomUUID(),
 
@@ -69,11 +69,17 @@ function buildOrderFields(contact, now) {
 
     tracking_number: "",
 
-    created_at: now,
+    created_at: nowIso,
 
-    updated_at: now,
+    created_at_text: nowText,
+
+    updated_at: nowIso,
+
+    updated_at_text: nowText,
 
     paid_at: "",
+
+    paid_at_text: "",
 
     invoice_url: "",
 
@@ -91,12 +97,13 @@ function buildOrderFields(contact, now) {
   }
 }
 
-async function saveDocumentUrls(env, orderRecordId, now) {
+async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
   const invoiceUrl = getInvoiceUrl(env, orderRecordId)
   const quotationUrl = getQuotationUrl(env, orderRecordId)
 
   const fields = {
-    updated_at: now
+    updated_at: nowIso,
+    updated_at_text: nowText
   }
 
   if (invoiceUrl) {
@@ -130,9 +137,13 @@ export async function createOrderFromContact(env, contact) {
     return activeOrderId
   }
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
-  const result = await createOrder(env, buildOrderFields(contact, now))
+  const result = await createOrder(
+    env,
+    buildOrderFields(contact, nowIso, nowText)
+  )
 
   const orderRecordId = result.record.record_id
 
@@ -142,7 +153,7 @@ export async function createOrderFromContact(env, contact) {
 
   console.log("ACTIVE ORDER SAVED TO CONTACT")
 
-  await saveDocumentUrls(env, orderRecordId, now)
+  await saveDocumentUrls(env, orderRecordId, nowIso, nowText)
 
   console.log("ORDER CREATED")
 
@@ -152,14 +163,17 @@ export async function createOrderFromContact(env, contact) {
 export async function markOrderPaid(env, orderRecordId) {
   console.log("MARK ORDER PAID:", orderRecordId)
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   await updateOrder(env, orderRecordId, {
     payment_status: "Paid",
     payment_verified: false,
     order_status: "Completed",
-    paid_at: now,
-    updated_at: now
+    paid_at: nowIso,
+    paid_at_text: nowText,
+    updated_at: nowIso,
+    updated_at_text: nowText
   })
 
   console.log("ORDER PAID")
@@ -190,11 +204,13 @@ export async function cancelActiveOrder(env, contact) {
     return false
   }
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   await updateOrder(env, orderId, {
     order_status: "Cancelled",
-    updated_at: now
+    updated_at: nowIso,
+    updated_at_text: nowText
   })
 
   console.log("ORDER CANCELLED")
@@ -203,6 +219,10 @@ export async function cancelActiveOrder(env, contact) {
 }
 
 export async function updateProductFromImage(env, contact, productName) {
+
+  const nowIso = getNowIso()
+  const nowText = getNowText()
+
   if (!productName) {
     return false
   }
@@ -216,7 +236,8 @@ export async function updateProductFromImage(env, contact, productName) {
 
   await updateOrder(env, orderId, {
     product_name: productName,
-    updated_at: getNow()
+    updated_at: nowIso,
+    updated_at_text: nowText
   })
 
   console.log("ORDER PRODUCT UPDATED:", productName)

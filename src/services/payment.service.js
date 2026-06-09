@@ -9,8 +9,7 @@ import {
   notifyPaymentSlipNoActiveOrder
 } from "./notification.service"
 
-import { getNow } from "../utils/date"
-
+import { getNowIso, getNowText } from "../utils/date"
 
 function toNumber(value) {
   if (value === null || value === undefined || value === "") {
@@ -40,7 +39,7 @@ function buildPendingSlipFields(imageAI) {
   }
 }
 
-function buildPaymentFieldsFromImageAI(imageAI, now) {
+function buildPaymentFieldsFromImageAI(imageAI, nowIso, nowText) {
   return {
     total_amount: toNumber(imageAI.slip_amount),
     slip_amount: toNumber(imageAI.slip_amount),
@@ -52,11 +51,12 @@ function buildPaymentFieldsFromImageAI(imageAI, now) {
     payment_verified: false,
     order_status: "Payment Review",
 
-    updated_at: now
+    updated_at: nowIso,
+    updated_at_text: nowText
   }
 }
 
-function buildPaymentFieldsFromPending(contact, now) {
+function buildPaymentFieldsFromPending(contact, nowIso, nowText) {
   return {
     total_amount: toNumber(contact.fields.pending_slip_amount),
     slip_amount: toNumber(contact.fields.pending_slip_amount),
@@ -68,7 +68,8 @@ function buildPaymentFieldsFromPending(contact, now) {
     payment_verified: false,
     order_status: "Payment Review",
 
-    updated_at: now
+    updated_at: nowIso,
+    updated_at_text: nowText
   }
 }
 
@@ -122,9 +123,10 @@ export async function applySlipToActiveOrder(env, contact, imageAI) {
     return false
   }
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
-  await updateOrder(env, orderId, buildPaymentFieldsFromImageAI(imageAI, now))
+  await updateOrder(env, orderId, buildPaymentFieldsFromImageAI(imageAI, nowIso, nowText))
 
   await notifyPaymentReceived(env, contact, {
     ...imageAI,
@@ -147,12 +149,13 @@ export async function applyPendingPaymentToOrder(env, contact, orderRecordId) {
     return false
   }
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   await updateOrder(
     env,
     orderRecordId,
-    buildPaymentFieldsFromPending(contact, now)
+    buildPaymentFieldsFromPending(contact, nowIso, nowText)
   )
 
   const imageAI = buildPendingImageAI(contact)
@@ -172,13 +175,16 @@ export async function closeDealAfterPayment(env, contact, dealRecordId) {
     return
   }
 
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   await updateDeal(env, dealRecordId, {
     status: "Won",
     stage: "Won",
-    closed_at: now,
-    updated_at: now
+    closed_at: nowIso,
+    closed_at_text: nowText,
+    updated_at: nowIso,
+    updated_at_text: nowText
   })
 
   await updateContact(env, contact.record_id, {

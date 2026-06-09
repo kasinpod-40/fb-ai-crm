@@ -1,7 +1,5 @@
-import { getNow } from "../utils/date"
-
 function buildDatePart() {
-  const now = getNow()
+  const now = new Date()
 
   const yyyy = now.getFullYear()
   const mm = String(now.getMonth() + 1).padStart(2, "0")

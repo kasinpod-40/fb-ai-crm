@@ -14,7 +14,7 @@ import {
   notifyAiReviewRequired
 } from "./notification.service"
 
-import { getNow } from "../utils/date"
+import { getNowIso, getNowText } from "../utils/date"
 
 function buildImageAIResult(imageAI, imageUrl) {
   const isPaymentSlip = imageAI.image_type === "payment_slip"
@@ -137,7 +137,8 @@ export async function processLead(
     image_confidence: ai.image_ai?.confidence || 0,
 
     timestamp,
-    created_at: getNow()
+    created_at: getNowIso(),
+    created_at_text: getNowText()
   })
 
   console.log("MESSAGE SAVED")

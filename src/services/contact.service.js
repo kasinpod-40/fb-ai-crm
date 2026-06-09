@@ -14,7 +14,7 @@ import { applyPendingPaymentToOrder } from "./payment.service"
 
 import { notifyNewLead, notifyHotLead } from "./notification.service"
 
-import { getNow } from "../utils/date"
+import { getNowIso, getNowText } from "../utils/date"
 
 function isHotLead(ai, fields) {
   return ai.hot_lead === true || Number(fields.lead_score || 0) >= 80
@@ -49,7 +49,8 @@ function buildContactFields(
   ai,
   currentMessageCount
 ) {
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   const fields = {
     sender_id: senderId,
@@ -58,10 +59,12 @@ function buildContactFields(
     lead_score: calculateLeadScore(ai),
     hot_lead: ai.hot_lead,
     last_message: message,
-    last_contact_at: now,
     ai_summary: ai.summary,
     message_count: currentMessageCount + 1,
-    updated_at: now
+    last_contact_at: nowIso,
+    last_contact_at_text: nowText,
+    updated_at: nowIso,
+    updated_at_text: nowText
   }
 
   if (ai.intent === "delivery_address") {
@@ -120,7 +123,8 @@ async function handleDeliveryAddress(env, contact, ai) {
 }
 
 export async function syncContact(env, senderId, pageId, message, ai) {
-  const now = getNow()
+  const nowIso = getNowIso()
+  const nowText = getNowText()
 
   const contact = await findContactBySenderId(env, senderId)
 
@@ -158,8 +162,10 @@ export async function syncContact(env, senderId, pageId, message, ai) {
 
   const result = await createContact(env, {
     ...fields,
-    first_contact_at: now,
-    created_at: now
+    first_contact_at: nowIso,
+    first_contact_at_text: nowText,
+    created_at: nowIso,
+    created_at_text: nowText
   })
 
   console.log("CONTACT CREATED")
