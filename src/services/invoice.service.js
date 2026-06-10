@@ -1,4 +1,7 @@
-import { findOrderByRecordId, updateOrder } from "../repositories/order.repository"
+import {
+  findOrderByRecordId,
+  updateOrder
+} from "../repositories/order.repository"
 
 function formatMoney(value) {
   const amount = Number(value || 0)
@@ -46,8 +49,60 @@ function getPaymentBadge(paymentStatus, paymentVerified) {
   return `<span class="badge pending">Pending</span>`
 }
 
+async function notifyTaxFormSubmitted(
+  env,
+  order,
+  taxName,
+  taxId,
+  taxInvoiceUrl
+) {
+  if (!env.LARK_BOT_WEBHOOK_URL) {
+    console.log("LARK BOT WEBHOOK URL NOT SET")
+    return
+  }
+
+  const fields = order?.fields || {}
+
+  const text = [
+    "🧾 ลูกค้ากรอกข้อมูลใบกำกับภาษีแล้ว",
+    "",
+    `🛒 Order: ${fields.order_number || fields.order_id || "-"}`,
+    `👤 Customer: ${fields.customer_name || "-"}`,
+    `🏢 Tax Name: ${taxName || "-"}`,
+    `🆔 Tax ID: ${taxId || "-"}`,
+    "",
+    `🔗 Tax Invoice: ${taxInvoiceUrl || "-"}`
+  ].join("\n")
+
+  try {
+    const res = await fetch(env.LARK_BOT_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        msg_type: "text",
+        content: {
+          text
+        }
+      })
+    })
+
+    const data = await res.json().catch(() => ({}))
+
+    console.log("TAX FORM NOTIFICATION RESPONSE:", JSON.stringify(data))
+
+    if (!res.ok) {
+      console.log("TAX FORM NOTIFICATION HTTP ERROR:", res.status)
+    }
+  } catch (err) {
+    console.log("TAX FORM NOTIFICATION FAILED:", err)
+  }
+}
+
 function renderDocumentHtml({
   type,
+  sellerName,
   number,
   orderNumber,
   customerName,
@@ -288,7 +343,7 @@ function renderDocumentHtml({
     <header class="header">
       <div class="brand">
         <h1>${type}</h1>
-        <div class="sub">Messenger AI CRM (ชื่อบริษัท)</div>
+        <div class="sub">${sellerName}</div>
       </div>
 
       <div class="meta">
@@ -388,8 +443,8 @@ function renderDocumentHtml({
     <footer class="footer">
       ${
         isInvoice
-          ? "This invoice was generated automatically by Messenger AI CRM (ชื่อบริษัท). Please verify payment before shipment."
-          : "This quotation was generated automatically by Messenger AI CRM (ชื่อบริษัท). Please confirm stock and payment before shipment."
+          ? `This invoice was generated automatically by ${sellerName}. Please verify payment before shipment.`
+          : `This quotation was generated automatically by ${sellerName}. Please confirm stock and payment before shipment.`
       }
     </footer>
   </main>
@@ -398,13 +453,14 @@ function renderDocumentHtml({
 `
 }
 
-function buildDocumentData(order, orderId, type) {
+function buildDocumentData(env, order, orderId, type) {
   const f = order.fields || {}
 
   const isInvoice = type === "INVOICE"
 
   return {
     type,
+    sellerName: escapeHtml(env.SELLER_NAME || "Messenger AI CRM"),
     number: escapeHtml(
       isInvoice
         ? f.invoice_number || "-"
@@ -438,7 +494,9 @@ export async function renderInvoicePage(request, env, orderId) {
     })
   }
 
-  const html = renderDocumentHtml(buildDocumentData(order, orderId, "INVOICE"))
+  const html = renderDocumentHtml(
+    buildDocumentData(env, order, orderId, "INVOICE")
+  )
 
   return new Response(html, {
     headers: {
@@ -457,7 +515,7 @@ export async function renderQuotationPage(request, env, orderId) {
   }
 
   const html = renderDocumentHtml(
-    buildDocumentData(order, orderId, "QUOTATION")
+    buildDocumentData(env, order, orderId, "QUOTATION")
   )
 
   return new Response(html, {
@@ -493,7 +551,9 @@ export async function renderTaxFormPage(request, env, orderId) {
   const order = await findOrderByRecordId(env, orderId)
 
   if (!order) {
-    return new Response("Order not found", { status: 404 })
+    return new Response("Order not found", {
+      status: 404
+    })
   }
 
   const f = order.fields || {}
@@ -683,6 +743,8 @@ export async function handleTaxFormSubmit(request, env, orderId) {
     tax_invoice_status: "Requested"
   })
 
+  await notifyTaxFormSubmitted(env, order, taxName, taxId, taxInvoiceUrl)
+
   const html = `
 <!DOCTYPE html>
 <html lang="th">
@@ -766,8 +828,12 @@ export async function renderTaxInvoicePage(request, env, orderId) {
   const vat = subtotal * 0.07
   const grandTotal = subtotal + vat
 
-  const number =
-    f.tax_invoice_number || `TAX-${f.invoice_number || orderId}`
+  const number = f.tax_invoice_number || `TAX-${f.invoice_number || orderId}`
+
+  const sellerName = escapeHtml(env.SELLER_NAME || "Messenger AI CRM")
+  const sellerTaxId = escapeHtml(env.SELLER_TAX_ID || "-")
+  const sellerAddress = escapeHtml(env.SELLER_ADDRESS || "-")
+  const sellerPhone = escapeHtml(env.SELLER_PHONE || "-")
 
   const html = `
 <!DOCTYPE html>
@@ -837,6 +903,7 @@ export async function renderTaxInvoicePage(request, env, orderId) {
       margin-top: 8px;
       color: #6b7280;
       font-size: 14px;
+      line-height: 1.6;
     }
 
     .meta {
@@ -966,7 +1033,12 @@ export async function renderTaxInvoicePage(request, env, orderId) {
     <header class="header">
       <div class="brand">
         <h1>TAX INVOICE</h1>
-        <div class="sub">Messenger AI CRM (ชื่อบริษัท)</div>
+        <div class="sub">
+          ${sellerName}<br/>
+          Tax ID: ${sellerTaxId}<br/>
+          ${sellerAddress}<br/>
+          Tel: ${sellerPhone}
+        </div>
       </div>
 
       <div class="meta">
@@ -1038,7 +1110,7 @@ export async function renderTaxInvoicePage(request, env, orderId) {
     </section>
 
     <footer class="footer">
-      This tax invoice was generated automatically by Messenger AI CRM (ชื่อบริษัท). Please verify tax information before official use.
+      This tax invoice was generated automatically by ${sellerName}. Please verify tax information before official use.
     </footer>
   </main>
 </body>

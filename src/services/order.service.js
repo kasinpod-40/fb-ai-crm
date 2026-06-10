@@ -22,19 +22,27 @@ function generateOrderNumber() {
 }
 
 function getInvoiceUrl(env, orderRecordId) {
-  if (!env.PUBLIC_BASE_URL) {
-    return ""
-  }
+  if (!env.PUBLIC_BASE_URL) return ""
 
   return `${env.PUBLIC_BASE_URL}/invoice/${orderRecordId}`
 }
 
 function getQuotationUrl(env, orderRecordId) {
-  if (!env.PUBLIC_BASE_URL) {
-    return ""
-  }
+  if (!env.PUBLIC_BASE_URL) return ""
 
   return `${env.PUBLIC_BASE_URL}/quotation/${orderRecordId}`
+}
+
+function getTaxFormUrl(env, orderRecordId) {
+  if (!env.PUBLIC_BASE_URL) return ""
+
+  return `${env.PUBLIC_BASE_URL}/tax-form/${orderRecordId}`
+}
+
+function getTaxInvoiceUrl(env, orderRecordId) {
+  if (!env.PUBLIC_BASE_URL) return ""
+
+  return `${env.PUBLIC_BASE_URL}/tax-invoice/${orderRecordId}`
 }
 
 function buildOrderFields(contact, nowIso, nowText) {
@@ -95,6 +103,22 @@ function buildOrderFields(contact, nowIso, nowText) {
 
     quotation_pdf_url: "",
 
+    tax_form_url: "",
+
+    tax_invoice_url: "",
+
+    tax_invoice_number: "",
+
+    tax_invoice_status: "Not Requested",
+
+    need_tax_invoice: false,
+
+    tax_name: "",
+
+    tax_address: "",
+
+    tax_id: "",
+
     sales_owner: contact.fields.sales_owner || "Unassigned",
 
     product_qty: toNumber(contact.fields.product_qty),
@@ -103,15 +127,15 @@ function buildOrderFields(contact, nowIso, nowText) {
 
     is_overdue: false,
 
-    overdue_alert_sent: false,
-
-    tax_form_url: getTaxFormUrl(env, orderRecordId)
+    overdue_alert_sent: false
   }
 }
 
 async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
   const invoiceUrl = getInvoiceUrl(env, orderRecordId)
   const quotationUrl = getQuotationUrl(env, orderRecordId)
+  const taxFormUrl = getTaxFormUrl(env, orderRecordId)
+  const taxInvoiceUrl = getTaxInvoiceUrl(env, orderRecordId)
 
   const fields = {
     updated_at: nowIso,
@@ -126,7 +150,15 @@ async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
     fields.quotation_url = quotationUrl
   }
 
-  if (!invoiceUrl && !quotationUrl) {
+  if (taxFormUrl) {
+    fields.tax_form_url = taxFormUrl
+  }
+
+  if (taxInvoiceUrl) {
+    fields.tax_invoice_url = taxInvoiceUrl
+  }
+
+  if (!invoiceUrl && !quotationUrl && !taxFormUrl && !taxInvoiceUrl) {
     console.log("PUBLIC_BASE_URL NOT SET, SKIP DOCUMENT URL")
     return
   }
@@ -135,6 +167,8 @@ async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
 
   console.log("INVOICE URL SAVED:", invoiceUrl)
   console.log("QUOTATION URL SAVED:", quotationUrl)
+  console.log("TAX FORM URL SAVED:", taxFormUrl)
+  console.log("TAX INVOICE URL SAVED:", taxInvoiceUrl)
 }
 
 export async function createOrderFromContact(env, contact) {

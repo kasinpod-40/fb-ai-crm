@@ -47,7 +47,7 @@ function buildPaymentFieldsFromImageAI(imageAI, nowIso, nowText) {
     slip_time: imageAI.slip_time || "",
     slip_image_url: imageAI.image_url || "",
 
-    payment_status: "Pending",
+    payment_status: "Paid",
     payment_verified: false,
     order_status: "Payment Review",
 
@@ -64,7 +64,7 @@ function buildPaymentFieldsFromPending(contact, nowIso, nowText) {
     slip_time: contact.fields.pending_slip_time || "",
     slip_image_url: contact.fields.pending_slip_image_url || "",
 
-    payment_status: "Pending",
+    payment_status: "Paid",
     payment_verified: false,
     order_status: "Payment Review",
 
