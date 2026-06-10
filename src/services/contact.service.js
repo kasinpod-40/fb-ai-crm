@@ -45,6 +45,8 @@ function toNumber(value) {
 function buildContactFields(
   senderId,
   pageId,
+  pageName,
+  salesTeam,
   message,
   ai,
   currentMessageCount
@@ -55,6 +57,9 @@ function buildContactFields(
   const fields = {
     sender_id: senderId,
     page_id: pageId,
+    page_name: pageName,
+    sales_team: salesTeam,
+
     current_stage: mapStage(ai),
     lead_score: calculateLeadScore(ai),
     hot_lead: ai.hot_lead,
@@ -122,7 +127,15 @@ async function handleDeliveryAddress(env, contact, ai) {
   }
 }
 
-export async function syncContact(env, senderId, pageId, message, ai) {
+export async function syncContact(
+  env,
+  senderId,
+  pageId,
+  pageName,
+  salesTeam,
+  message,
+  ai
+) {
   const nowIso = getNowIso()
   const nowText = getNowText()
 
@@ -133,6 +146,8 @@ export async function syncContact(env, senderId, pageId, message, ai) {
   const fields = buildContactFields(
     senderId,
     pageId,
+    pageName,
+    salesTeam,
     message,
     ai,
     currentMessageCount

@@ -1,5 +1,7 @@
 import { processLead } from "../services/lead.service"
 
+import { getPageConfig } from "../services/page.service"
+
 export async function handleWebhook(request, env) {
   try {
     const body = await request.json()
@@ -11,13 +13,17 @@ export async function handleWebhook(request, env) {
     }
 
     for (const entry of body.entry || []) {
+
+      const pageId = entry.id
+      const pageConfig = await getPageConfig(env, pageId)
+
       for (const messaging of entry.messaging || []) {
         if (!messaging.message) {
           continue
         }
 
         const senderId = messaging.sender?.id
-        const pageId = messaging.recipient?.id
+        // const pageId = messaging.recipient?.id
         const timestamp = messaging.timestamp
         const messageId = messaging.message?.mid
         const text = messaging.message?.text || ""
@@ -35,7 +41,7 @@ export async function handleWebhook(request, env) {
         console.log("MESSAGE:", text)
         console.log("IMAGE URL:", imageUrl)
 
-        await processLead(env, senderId, pageId, text, timestamp, messageId, {
+        await processLead(env, senderId, pageId, pageConfig.page_name , text, timestamp, messageId, {
           messageType,
           imageUrl,
           attachmentId

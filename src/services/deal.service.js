@@ -18,15 +18,23 @@ import { notifyAiReviewRequired } from "./notification.service"
 import { getNowIso, getNowText } from "../utils/date"
 
 function getProductName(contact, ai) {
-  return (
-    ai.image_ai?.product_name ||
-    ai.product_name ||
-    ""
-  )
+  return ai.image_ai?.product_name || ai.product_name || ""
 }
 
 function isPaymentSlip(ai) {
   return ai.image_ai?.image_type === "payment_slip"
+}
+
+function shouldCreateDeal(ai) {
+  const blockedIntents = ["greeting", "unknown", "support", "image_received"]
+
+  const allowedStages = ["interested", "negotiating", "closing", "won", "lost"]
+
+  if (blockedIntents.includes(ai.intent)) {
+    return false
+  }
+
+  return allowedStages.includes(ai.customer_stage)
 }
 
 function toNumber(value) {
@@ -51,6 +59,10 @@ function buildDealUpdateFields(contact, ai, nowIso, nowText) {
   const productName = getProductName(contact, ai)
 
   const fields = {
+    page_id: contact.fields.page_id || "",
+    page_name: contact.fields.page_name || "",
+    sales_team: contact.fields.sales_team || "",
+
     stage: mapStage(ai),
     lead_score: calculateLeadScore(ai),
     ai_summary: ai.summary,
@@ -84,7 +96,7 @@ function buildDealUpdateFields(contact, ai, nowIso, nowText) {
 async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
   fields.status = "Lost"
   fields.stage = "Lost"
-  fields.closed_at = nowIso,
+  fields.closed_at = nowIso
   fields.closed_at_text = nowText
 
   await cancelActiveOrder(env, contact)
@@ -118,7 +130,6 @@ async function handlePaymentSlip(env, contact, ai) {
 
   if (paymentAttached) {
     console.log("PAYMENT SLIP ATTACHED - WAITING FOR VERIFICATION")
-
     return true
   }
 
@@ -165,6 +176,12 @@ function buildNewDealFields(contact, ai, nowIso, nowText) {
 
     sender_id: contact.fields.sender_id,
 
+    page_id: contact.fields.page_id || "",
+
+    page_name: contact.fields.page_name || "",
+
+    sales_team: contact.fields.sales_team || "",
+
     deal_name: `Deal ${contact.fields.sender_id}`,
 
     stage: isPaymentSlip(ai) ? "Closing" : mapStage(ai),
@@ -187,7 +204,7 @@ function buildNewDealFields(contact, ai, nowIso, nowText) {
 
     updated_at_text: nowText,
 
-    closed_at: isLost ? nowIso : "",
+    closed_at: isLost ? nowIso : null,
 
     closed_at_text: isLost ? nowText : "",
 
@@ -237,6 +254,7 @@ export async function syncDeal(env, contact, ai) {
       await updateDeal(env, activeDealId, fields)
 
       console.log("DEAL UPDATED AFTER PAYMENT SLIP")
+
       return
     }
 
@@ -262,7 +280,20 @@ export async function syncDeal(env, contact, ai) {
     return
   }
 
-  const result = await createDeal(env, buildNewDealFields(contact, ai, nowIso, nowText))
+  if (!shouldCreateDeal(ai)) {
+    console.log(
+      "SKIP CREATE DEAL FOR NON-SALES MESSAGE:",
+      ai.intent,
+      ai.customer_stage
+    )
+
+    return
+  }
+
+  const result = await createDeal(
+    env,
+    buildNewDealFields(contact, ai, nowIso, nowText)
+  )
 
   const recordId = result.record.record_id
 

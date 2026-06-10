@@ -45,6 +45,12 @@ function buildOrderFields(contact, nowIso, nowText) {
 
     sender_id: contact.fields.sender_id,
 
+    page_id: contact.fields.page_id || "",
+
+    page_name: contact.fields.page_name || "",
+
+    sales_team: contact.fields.sales_team || "",
+
     deal_record_id: contact.fields.active_deal_id || "",
 
     customer_name: contact.fields.delivery_name || "",
@@ -77,7 +83,7 @@ function buildOrderFields(contact, nowIso, nowText) {
 
     updated_at_text: nowText,
 
-    paid_at: "",
+    paid_at: null,
 
     paid_at_text: "",
 
@@ -93,7 +99,13 @@ function buildOrderFields(contact, nowIso, nowText) {
 
     product_qty: toNumber(contact.fields.product_qty),
 
-    product_unit: contact.fields.product_unit || ""
+    product_unit: contact.fields.product_unit || "",
+
+    is_overdue: false,
+
+    overdue_alert_sent: false,
+
+    tax_form_url: getTaxFormUrl(env, orderRecordId)
   }
 }
 
@@ -219,7 +231,6 @@ export async function cancelActiveOrder(env, contact) {
 }
 
 export async function updateProductFromImage(env, contact, productName) {
-
   const nowIso = getNowIso()
   const nowText = getNowText()
 

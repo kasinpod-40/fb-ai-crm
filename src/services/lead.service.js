@@ -14,6 +14,8 @@ import {
   notifyAiReviewRequired
 } from "./notification.service"
 
+import { getPageConfig } from "./page.service"
+
 import { getNowIso, getNowText } from "../utils/date"
 
 function buildImageAIResult(imageAI, imageUrl) {
@@ -21,23 +23,11 @@ function buildImageAIResult(imageAI, imageUrl) {
 
   return {
     intent: isPaymentSlip ? "closed_sale" : "product_info",
-
     interest_level: isPaymentSlip ? "high" : "medium",
-
-    // สำคัญ:
-    // ถ้าเป็นสลิปแต่ยังไม่รู้ว่ามี Order ไหม
-    // ห้ามตั้งเป็น won ตั้งแต่ตรงนี้
     customer_stage: isPaymentSlip ? "closing" : "interested",
-
     hot_lead: isPaymentSlip,
-
-    // สำคัญ:
-    // ห้าม true จากรูปสลิปทันที
-    // ให้ payment.service เป็นคนปิด Paid/Won หลัง apply payment สำเร็จ
     closed_sale: false,
-
     summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
-
     image_ai: {
       ...imageAI,
       image_url: imageUrl
@@ -74,6 +64,7 @@ export async function processLead(
   env,
   senderId,
   pageId,
+  pageNameFromWebhook,
   text,
   timestamp,
   messageId,
@@ -87,6 +78,11 @@ export async function processLead(
     console.log("DUPLICATE MESSAGE SKIPPED:", messageId)
     return
   }
+
+  const pageConfig = await getPageConfig(env, pageId)
+
+  const pageName =
+    pageConfig.page_name || pageNameFromWebhook || pageId
 
   const messageType = metadata.messageType || "text"
   const imageUrl = metadata.imageUrl || ""
@@ -116,8 +112,10 @@ export async function processLead(
     message_id: messageId,
     sender_id: senderId,
     page_id: pageId,
-    message: buildSavedMessageText(messageType, text),
+    page_name: pageName,
+    sales_team: pageConfig.sales_team,
 
+    message: buildSavedMessageText(messageType, text),
     message_type: messageType,
     image_url: imageUrl,
     attachment_id: attachmentId,
@@ -143,7 +141,15 @@ export async function processLead(
 
   console.log("MESSAGE SAVED")
 
-  const contact = await syncContact(env, senderId, pageId, text, ai)
+  const contact = await syncContact(
+    env,
+    senderId,
+    pageId,
+    pageName,
+    pageConfig.sales_team,
+    text,
+    ai
+  )
 
   console.log("CONTACT RETURN:", JSON.stringify(contact))
 
