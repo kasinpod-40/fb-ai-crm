@@ -3,6 +3,27 @@ function match(text, keywords) {
 }
 
 const RULES = {
+  greeting: [
+    "hi",
+    "hello",
+    "สวัสดี",
+    "สวัสดีครับ",
+    "สวัสดีค่ะ",
+    "หวัดดี",
+    "หวัดดีครับ",
+    "หวัดดีค่ะ"
+  ],
+
+  general_inquiry: [
+    "สอบถามครับ",
+    "สอบถามค่ะ",
+    "สอบถามคะ",
+    "สอบถามหน่อยครับ",
+    "สอบถามหน่อยค่ะ",
+    "ขอสอบถาม",
+    "สอบถาม"
+  ],
+
   ask_price: ["ราคา", "ราคาเท่าไร", "ราคาเท่าไหร่", "กี่บาท", "เท่าไหร่"],
 
   ask_discount: ["ลดได้ไหม", "ลดได้มั้ย", "ลดราคา", "มีส่วนลดไหม", "ขอลด"],
@@ -33,7 +54,9 @@ const RULES = {
     "มีไซส์ไหม",
     "มีไซส์อะไรบ้าง",
     "มีขนาดไหม",
-    "พร้อมส่งไหม"
+    "พร้อมส่งไหม",
+    "ขอรูปเพิ่ม",
+    "รายละเอียดสินค้า"
   ],
 
   closed_sale: [
@@ -59,6 +82,28 @@ const RULES = {
 
 function buildResult(intent) {
   const map = {
+    greeting: {
+      interest_level: "low",
+      customer_stage: "new_lead",
+      hot_lead: false,
+      closed_sale: false,
+      product_name: "",
+      product_qty: 0,
+      product_unit: "",
+      summary: "ลูกค้าทักเข้ามา"
+    },
+
+    general_inquiry: {
+      interest_level: "low",
+      customer_stage: "new_lead",
+      hot_lead: false,
+      closed_sale: false,
+      product_name: "",
+      product_qty: 0,
+      product_unit: "",
+      summary: "ลูกค้าสอบถามข้อมูลเพิ่มเติม"
+    },
+
     ask_price: {
       interest_level: "medium",
       customer_stage: "interested",
@@ -121,6 +166,9 @@ function buildResult(intent) {
       customer_stage: "new_lead",
       hot_lead: false,
       closed_sale: false,
+      product_name: "",
+      product_qty: 0,
+      product_unit: "",
       summary: "ข้อความทั่วไป"
     }
   }
@@ -149,8 +197,44 @@ function isThaiAddress(text) {
   return hasPhone && hasAddressKeyword && hasPostcode
 }
 
+function normalizeText(message) {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isOnlyGreetingOrInquiry(text) {
+  return RULES.greeting.includes(text) || RULES.general_inquiry.includes(text)
+}
+
 export function analyzeByRule(message) {
-  const text = (message || "").toLowerCase().trim()
+  const text = normalizeText(message)
+
+  if (!text) {
+    return {
+      intent: "unknown",
+      interest_level: "low",
+      customer_stage: "new_lead",
+      hot_lead: false,
+      closed_sale: false,
+      product_name: "",
+      product_qty: 0,
+      product_unit: "",
+      summary: "ข้อความไม่ชัดเจน"
+    }
+  }
+
+  // สำคัญมาก:
+  // ข้อความทักทาย / สอบถามทั่วไป ต้องจับก่อนสินค้า
+  // เพื่อไม่ให้ AI หรือ context เก่าเดาสินค้าเอง
+  if (isOnlyGreetingOrInquiry(text)) {
+    if (RULES.greeting.includes(text)) {
+      return buildResult("greeting")
+    }
+
+    return buildResult("general_inquiry")
+  }
 
   if (isThaiAddress(text)) {
     return {
@@ -219,6 +303,11 @@ function extractProductInfo(text) {
   const unit = matchResult[3] || ""
 
   if (!rawName || !qty || !unit) {
+    return null
+  }
+
+  // กันเคส "เอา 1 ลัง" ที่ไม่มีชื่อสินค้า
+  if (["เอา", "ขอ", "รับ", "สั่ง"].includes(rawName)) {
     return null
   }
 
