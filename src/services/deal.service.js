@@ -25,16 +25,51 @@ function isPaymentSlip(ai) {
   return ai.image_ai?.image_type === "payment_slip"
 }
 
-function shouldCreateDeal(ai) {
-  const blockedIntents = ["greeting", "unknown", "support", "image_received"]
+function isProductImage(ai) {
+  return ai.image_ai?.image_type === "product_image"
+}
 
-  const allowedStages = ["interested", "negotiating", "closing", "won", "lost"]
+function shouldCreateDeal(ai) {
+  if (!ai) {
+    return false
+  }
+
+  const blockedIntents = [
+    "greeting",
+    "general_inquiry",
+    "unknown",
+    "support",
+    "image_received",
+    "small_talk"
+  ]
 
   if (blockedIntents.includes(ai.intent)) {
     return false
   }
 
-  return allowedStages.includes(ai.customer_stage)
+  if (ai.image_ai?.image_type === "other") {
+    return false
+  }
+
+  if (ai.intent === "product_info") {
+    const hasProductName =
+      Boolean(ai.product_name) || Boolean(ai.image_ai?.product_name)
+
+    const hasProductQty = Boolean(ai.product_qty)
+    const hasProductUnit = Boolean(ai.product_unit)
+    const hasProductImage = isProductImage(ai)
+
+    if (
+      !hasProductName &&
+      !hasProductQty &&
+      !hasProductUnit &&
+      !hasProductImage
+    ) {
+      return false
+    }
+  }
+
+  return ["interested", "negotiating", "closing"].includes(ai.customer_stage)
 }
 
 function toNumber(value) {
@@ -110,7 +145,7 @@ async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
 }
 
 async function handleProductImage(env, contact, ai) {
-  if (ai.image_ai?.image_type === "product_image" && ai.image_ai.product_name) {
+  if (isProductImage(ai) && ai.image_ai.product_name) {
     await updateProductFromImage(env, contact, ai.image_ai.product_name)
 
     console.log("PRODUCT DETECTED:", ai.image_ai.product_name)
@@ -283,8 +318,9 @@ export async function syncDeal(env, contact, ai) {
   if (!shouldCreateDeal(ai)) {
     console.log(
       "SKIP CREATE DEAL FOR NON-SALES MESSAGE:",
-      ai.intent,
-      ai.customer_stage
+      ai?.intent,
+      ai?.customer_stage,
+      ai?.image_ai?.image_type || ""
     )
 
     return

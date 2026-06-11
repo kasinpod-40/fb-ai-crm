@@ -45,18 +45,135 @@ Schema:
   "summary": ""
 }
 
-image_type:
+image_type ที่อนุญาต:
 
 product_image
 payment_slip
 other
 
-กฎ:
+====================================================
 
-- ถ้าเป็นรูปสินค้า ให้พยายามระบุชื่อสินค้า
-- ถ้าเป็นสลิป ให้ดึงยอดเงิน ธนาคาร และเวลา
-- confidence ต้องเป็นเลข 0 ถึง 1
-- summary เป็นภาษาไทย
+กฎสำคัญมาก
+
+1. product_image
+
+ใช้เฉพาะเมื่อเป็น "สินค้า" อย่างชัดเจน
+
+ตัวอย่าง:
+
+- ถุงเมล็ดพันธุ์
+- กล่องสินค้า
+- สินค้าจริง
+- บรรจุภัณฑ์สินค้า
+- รูปสินค้าที่ลูกค้าส่งมาถาม
+
+ถ้าระบุสินค้าได้
+ให้ใส่ product_name
+
+====================================================
+
+2. payment_slip
+
+ใช้เฉพาะเมื่อเป็นสลิปโอนเงิน
+
+ให้ดึง
+
+- slip_amount
+- slip_bank
+- slip_time
+
+====================================================
+
+3. other
+
+ใช้เมื่อรูปไม่ใช่สินค้าและไม่ใช่สลิป
+
+ตัวอย่าง:
+
+- emoji
+- sticker
+- avatar
+- profile picture
+- logo
+- icon
+- meme
+- screenshot ทั่วไป
+- ภาพข้อความ
+- ภาพวิว
+- ภาพคน
+- ภาพสัตว์
+- ภาพการ์ตูน
+- รูปที่ไม่แน่ใจว่าเป็นสินค้า
+
+====================================================
+
+กฎสำคัญ
+
+ถ้าไม่มั่นใจ
+
+ให้เลือก
+
+image_type = "other"
+
+ห้ามเดาว่าเป็นสินค้า
+
+ห้ามเลือก product_image
+ถ้ารูปไม่ใช่สินค้าอย่างชัดเจน
+
+====================================================
+
+ตัวอย่าง
+
+emoji
+
+{
+  "image_type":"other",
+  "product_name":"",
+  "summary":"ลูกค้าส่งรูปภาพทั่วไป"
+}
+
+sticker
+
+{
+  "image_type":"other",
+  "product_name":"",
+  "summary":"ลูกค้าส่งรูปภาพทั่วไป"
+}
+
+logo
+
+{
+  "image_type":"other",
+  "product_name":"",
+  "summary":"ลูกค้าส่งรูปภาพทั่วไป"
+}
+
+ภาพวิว
+
+{
+  "image_type":"other",
+  "product_name":"",
+  "summary":"ลูกค้าส่งรูปภาพทั่วไป"
+}
+
+ถุงเมล็ดผักชีตราปลาวาฬ
+
+{
+  "image_type":"product_image",
+  "product_name":"เมล็ดผักชีตราปลาวาฬ"
+}
+
+สลิปโอนเงิน
+
+{
+  "image_type":"payment_slip"
+}
+
+====================================================
+
+confidence ต้องเป็นเลข 0 ถึง 1
+
+summary ต้องเป็นภาษาไทย
 `
 
   const result = await model.generateContent([
@@ -79,12 +196,23 @@ other
 
   return {
     image_type: parsed.image_type || "other",
-    product_name: parsed.product_name || "",
+
+    product_name:
+      parsed.image_type === "product_image" ? parsed.product_name || "" : "",
+
     slip_amount: toNumber(parsed.slip_amount),
+
     slip_bank: parsed.slip_bank || "",
+
     slip_time: parsed.slip_time || "",
+
     confidence: Number(parsed.confidence || 0),
-    summary: parsed.summary || "ไม่สามารถสรุปรูปภาพได้"
+
+    summary:
+      parsed.summary ||
+      (parsed.image_type === "other"
+        ? "ลูกค้าส่งรูปภาพทั่วไป"
+        : "ไม่สามารถสรุปรูปภาพได้")
   }
 }
 

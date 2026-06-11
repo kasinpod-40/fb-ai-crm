@@ -22,19 +22,61 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function normalizeImageResult(ai) {
+  if (!ai) {
+    return ai
+  }
+
+  if (ai?.image_ai?.image_type === "other") {
+    return {
+      ...ai,
+
+      intent: "image_received",
+
+      interest_level: "low",
+
+      customer_stage: "new_lead",
+
+      hot_lead: false,
+
+      closed_sale: false,
+
+      product_name: "",
+
+      product_qty: 0,
+
+      product_unit: "",
+
+      summary: "ลูกค้าส่งรูปภาพทั่วไป"
+    }
+  }
+
+  return ai
+}
+
 function normalizeAIResult(ai) {
+  ai = normalizeImageResult(ai)
+
   return {
     intent: ai?.intent || "unknown",
+
     interest_level: ai?.interest_level || "low",
+
     customer_stage: ai?.customer_stage || "new_lead",
+
     hot_lead: ai?.hot_lead === true,
+
     closed_sale: ai?.closed_sale === true,
 
     product_name: ai?.product_name || "",
+
     product_qty: toNumber(ai?.product_qty),
+
     product_unit: ai?.product_unit || "",
 
-    summary: ai?.summary || "ไม่สามารถวิเคราะห์ข้อความได้"
+    summary: ai?.summary || "ไม่สามารถวิเคราะห์ข้อความได้",
+
+    image_ai: ai?.image_ai || null
   }
 }
 
@@ -69,13 +111,23 @@ export async function analyze(env, text) {
 
   return {
     intent: "unknown",
+
     interest_level: "low",
+
     customer_stage: "new_lead",
+
     hot_lead: false,
+
     closed_sale: false,
+
     product_name: "",
+
     product_qty: 0,
+
     product_unit: "",
-    summary: "ไม่สามารถวิเคราะห์ข้อความได้"
+
+    summary: "ไม่สามารถวิเคราะห์ข้อความได้",
+
+    image_ai: null
   }
 }

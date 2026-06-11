@@ -19,17 +19,77 @@ import { getPageConfig } from "./page.service"
 import { getNowIso, getNowText } from "../utils/date"
 
 function buildImageAIResult(imageAI, imageUrl) {
-  const isPaymentSlip = imageAI.image_type === "payment_slip"
+  if (imageAI.image_type === "payment_slip") {
+    return {
+      intent: "closed_sale",
+
+      interest_level: "high",
+
+      customer_stage: "closing",
+
+      hot_lead: true,
+
+      closed_sale: false,
+
+      summary: imageAI.summary || "ลูกค้าส่งสลิป",
+
+      image_ai: {
+        ...imageAI,
+        image_url: imageUrl
+      }
+    }
+  }
+
+  if (imageAI.image_type === "product_image") {
+    return {
+      intent: "product_info",
+
+      interest_level: "medium",
+
+      customer_stage: "interested",
+
+      hot_lead: false,
+
+      closed_sale: false,
+
+      product_name: imageAI.product_name || "",
+
+      product_qty: 0,
+
+      product_unit: "",
+
+      summary: imageAI.summary || "ลูกค้าส่งรูปสินค้า",
+
+      image_ai: {
+        ...imageAI,
+        image_url: imageUrl
+      }
+    }
+  }
 
   return {
-    intent: isPaymentSlip ? "closed_sale" : "product_info",
-    interest_level: isPaymentSlip ? "high" : "medium",
-    customer_stage: isPaymentSlip ? "closing" : "interested",
-    hot_lead: isPaymentSlip,
+    intent: "image_received",
+
+    interest_level: "low",
+
+    customer_stage: "new_lead",
+
+    hot_lead: false,
+
     closed_sale: false,
-    summary: imageAI.summary || "ลูกค้าส่งรูปภาพ",
+
+    product_name: "",
+
+    product_qty: 0,
+
+    product_unit: "",
+
+    summary: "ลูกค้าส่งรูปภาพทั่วไป",
+
     image_ai: {
       ...imageAI,
+      image_type: imageAI.image_type || "other",
+      product_name: "",
       image_url: imageUrl
     }
   }
@@ -38,11 +98,23 @@ function buildImageAIResult(imageAI, imageUrl) {
 function buildImageFallbackResult(imageUrl) {
   return {
     intent: "image_received",
-    interest_level: "medium",
-    customer_stage: "interested",
+
+    interest_level: "low",
+
+    customer_stage: "new_lead",
+
     hot_lead: false,
+
     closed_sale: false,
+
+    product_name: "",
+
+    product_qty: 0,
+
+    product_unit: "",
+
     summary: "ลูกค้าส่งรูปภาพ แต่ระบบยังวิเคราะห์รูปไม่ได้",
+
     image_ai: {
       image_type: "unknown",
       product_name: "",
@@ -81,8 +153,7 @@ export async function processLead(
 
   const pageConfig = await getPageConfig(env, pageId)
 
-  const pageName =
-    pageConfig.page_name || pageNameFromWebhook || pageId
+  const pageName = pageConfig.page_name || pageNameFromWebhook || pageId
 
   const messageType = metadata.messageType || "text"
   const imageUrl = metadata.imageUrl || ""
@@ -128,7 +199,10 @@ export async function processLead(
     ai_summary: ai.summary,
 
     image_type: ai.image_ai?.image_type || "",
-    product_name: ai.product_name || ai.image_ai?.product_name || "",
+    product_name:
+      ai.intent === "product_info"
+        ? ai.product_name || ai.image_ai?.product_name || ""
+        : "",
     slip_amount: ai.image_ai?.slip_amount || 0,
     slip_bank: ai.image_ai?.slip_bank || "",
     slip_time: ai.image_ai?.slip_time || "",
@@ -147,7 +221,7 @@ export async function processLead(
     pageId,
     pageName,
     pageConfig.sales_team,
-    text,
+    buildSavedMessageText(messageType, text),
     ai
   )
 
