@@ -7,6 +7,19 @@ function cleanJson(raw) {
     .trim()
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  const chunkSize = 0x8000
+  let binary = ""
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+
+  return btoa(binary)
+}
+
 export async function analyzeImage(env, imageUrl) {
   const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY)
 
@@ -24,7 +37,7 @@ export async function analyzeImage(env, imageUrl) {
 
   const imageBuffer = await imageRes.arrayBuffer()
 
-  const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)))
+  const base64Image = arrayBufferToBase64(imageBuffer)
 
   const prompt = `
 คุณคือ AI Vision สำหรับระบบ Messenger AI CRM

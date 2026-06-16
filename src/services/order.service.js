@@ -15,10 +15,13 @@ function generateOrderNumber() {
   const yy = String(now.getFullYear()).slice(-2)
   const mm = String(now.getMonth() + 1).padStart(2, "0")
   const dd = String(now.getDate()).padStart(2, "0")
+  const hh = String(now.getHours()).padStart(2, "0")
+  const mi = String(now.getMinutes()).padStart(2, "0")
+  const ss = String(now.getSeconds()).padStart(2, "0")
 
-  const random = Math.floor(Math.random() * 9000) + 1000
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()
 
-  return `ORD-${yy}${mm}${dd}-${random}`
+  return `ORD-${yy}${mm}${dd}-${hh}${mi}${ss}-${suffix}`
 }
 
 function getInvoiceUrl(env, orderRecordId) {
@@ -39,10 +42,6 @@ function getTaxFormUrl(env, orderRecordId) {
 function getTaxInvoiceUrl(env, orderRecordId) {
   if (!env.PUBLIC_BASE_URL) return ""
   return `${env.PUBLIC_BASE_URL}/tax-invoice/${orderRecordId}`
-}
-
-function hasAddress(contact) {
-  return Boolean(String(contact?.fields?.delivery_address || "").trim())
 }
 
 function buildOrderFields(contact, nowIso, nowText) {

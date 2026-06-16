@@ -3,7 +3,8 @@ import { analyzeImage } from "./image-ai"
 
 import {
   saveMessageRecord,
-  findMessageById
+  findMessageById,
+  updateMessageRecord
 } from "../repositories/message.repository"
 
 import { syncContact } from "./contact.service"
@@ -102,6 +103,10 @@ function buildSavedMessageText(messageType, text) {
   return messageType === "image" ? "รูปภาพ" : text
 }
 
+function getErrorMessage(err) {
+  return (err?.message || String(err || "Unknown sync error")).slice(0, 1000)
+}
+
 export async function processLead(
   env,
   senderId,
@@ -149,7 +154,7 @@ export async function processLead(
 
   console.log("AI RESULT:", JSON.stringify(ai))
 
-  await saveMessageRecord(env, {
+  const messageResult = await saveMessageRecord(env, {
     message_id: messageId,
     sender_id: senderId,
     page_id: pageId,
@@ -180,30 +185,53 @@ export async function processLead(
 
     timestamp,
     created_at: getNowIso(),
-    created_at_text: getNowText()
+    created_at_text: getNowText(),
+    process_status: "processing",
+    error_message: ""
   })
 
   console.log("MESSAGE SAVED")
 
-  const contact = await syncContact(
-    env,
-    senderId,
-    pageId,
-    pageName,
-    pageConfig.sales_team,
-    buildSavedMessageText(messageType, text),
-    ai
-  )
+  const messageRecordId = messageResult.data?.record?.record_id
 
-  console.log("CONTACT RETURN:", JSON.stringify(contact))
+  try {
+    const contact = await syncContact(
+      env,
+      senderId,
+      pageId,
+      pageName,
+      pageConfig.sales_team,
+      pageConfig.default_sales_owner,
+      buildSavedMessageText(messageType, text),
+      ai
+    )
 
-  const reviewReason = getAiReviewReason(ai)
+    console.log("CONTACT RETURN:", JSON.stringify(contact))
 
-  if (reviewReason) {
-    await notifyAiReviewRequired(env, contact, ai, reviewReason)
+    const reviewReason = getAiReviewReason(ai)
+
+    if (reviewReason) {
+      await notifyAiReviewRequired(env, contact, ai, reviewReason)
+    }
+
+    await syncDeal(env, contact, ai)
+
+    if (messageRecordId) {
+      await updateMessageRecord(env, messageRecordId, {
+        process_status: "synced",
+        error_message: ""
+      })
+    }
+
+    console.log("CONTACT SYNCED")
+  } catch (err) {
+    console.log("SYNC FAILED:", err)
+
+    if (messageRecordId) {
+      await updateMessageRecord(env, messageRecordId, {
+        process_status: "sync_failed",
+        error_message: getErrorMessage(err)
+      })
+    }
   }
-
-  await syncDeal(env, contact, ai)
-
-  console.log("CONTACT SYNCED")
 }

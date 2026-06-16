@@ -2,7 +2,8 @@ import { createDeal, updateDeal } from "../repositories/deal.repository"
 
 import {
   updateActiveDeal,
-  updateActiveOrder
+  updateActiveOrder,
+  updateContact
 } from "../repositories/contact.repository"
 
 import { updateOrder } from "../repositories/order.repository"
@@ -33,6 +34,10 @@ function isPaymentSlip(ai) {
 
 function isProductImage(ai) {
   return ai.image_ai?.image_type === "product_image"
+}
+
+function isLost(ai) {
+  return ai?.customer_stage === "lost" || ai?.intent === "lost"
 }
 
 function shouldCreateDeal(ai) {
@@ -120,6 +125,77 @@ function buildDealUpdateFields(contact, ai, nowIso, nowText) {
   return fields
 }
 
+async function cleanupContactAfterLost(env, contact, nowIso, nowText) {
+  const requiredFields = {
+    current_stage: "Lost",
+    lead_score: 0,
+    hot_lead: false,
+
+    product_name: "",
+    product_qty: 0,
+    product_unit: "",
+
+    delivery_name: "",
+    delivery_phone: "",
+    delivery_address: "",
+
+    pending_payment: false,
+    pending_slip_amount: 0,
+    pending_slip_bank: "",
+    pending_slip_time: "",
+    pending_slip_image_url: "",
+
+    active_deal_id: "",
+    active_order_id: "",
+
+    ai_summary: "ลูกค้ายกเลิกการซื้อ รอเริ่มการขายใหม่",
+    updated_at: nowIso,
+    updated_at_text: nowText
+  }
+
+  await updateContact(env, contact.record_id, requiredFields)
+
+  const optionalFields = {
+    product_source: ""
+  }
+
+  for (const [fieldName, value] of Object.entries(optionalFields)) {
+    try {
+      await updateContact(env, contact.record_id, {
+        [fieldName]: value
+      })
+    } catch (err) {
+      console.log(`OPTIONAL LOST CLEANUP SKIPPED: ${fieldName}`, err)
+    }
+  }
+
+  contact.fields.current_stage = "Lost"
+  contact.fields.lead_score = 0
+  contact.fields.hot_lead = false
+
+  contact.fields.product_name = ""
+  contact.fields.product_qty = 0
+  contact.fields.product_unit = ""
+  contact.fields.product_source = ""
+
+  contact.fields.delivery_name = ""
+  contact.fields.delivery_phone = ""
+  contact.fields.delivery_address = ""
+
+  contact.fields.pending_payment = false
+  contact.fields.pending_slip_amount = 0
+  contact.fields.pending_slip_bank = ""
+  contact.fields.pending_slip_time = ""
+  contact.fields.pending_slip_image_url = ""
+
+  contact.fields.active_deal_id = ""
+  contact.fields.active_order_id = ""
+
+  contact.fields.ai_summary = "ลูกค้ายกเลิกการซื้อ รอเริ่มการขายใหม่"
+
+  console.log("CONTACT LOST CLEANUP COMPLETED")
+}
+
 async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
   fields.status = "Lost"
   fields.stage = "Lost"
@@ -131,12 +207,9 @@ async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
   await updateActiveDeal(env, contact.record_id, "")
   await updateActiveOrder(env, contact.record_id, "")
 
-  contact.fields.active_deal_id = ""
-  contact.fields.active_order_id = ""
+  await cleanupContactAfterLost(env, contact, nowIso, nowText)
 
   console.log("DEAL CLOSED AS LOST")
-  console.log("ACTIVE DEAL CLEARED")
-  console.log("ACTIVE ORDER CLEARED")
 }
 
 async function handleProductImage(env, contact, ai) {
@@ -301,6 +374,22 @@ export async function syncDeal(env, contact, ai) {
 
   console.log("ACTIVE DEAL:", activeDealId)
 
+  if (isLost(ai)) {
+    if (activeDealId) {
+      const fields = buildDealUpdateFields(contact, ai, nowIso, nowText)
+
+      await closeDealAsLost(env, contact, fields, nowIso, nowText)
+      await updateDeal(env, activeDealId, fields)
+    } else {
+      await cancelActiveOrder(env, contact)
+      await cleanupContactAfterLost(env, contact, nowIso, nowText)
+    }
+
+    console.log("LOST FLOW COMPLETED")
+
+    return
+  }
+
   if (activeDealId) {
     const fields = buildDealUpdateFields(contact, ai, nowIso, nowText)
 
@@ -335,16 +424,6 @@ export async function syncDeal(env, contact, ai) {
       ai,
       fields
     )
-
-    if (ai.customer_stage === "lost") {
-      await closeDealAsLost(env, contact, fields, nowIso, nowText)
-
-      await updateDeal(env, activeDealId, fields)
-
-      console.log("DEAL UPDATED AS LOST")
-
-      return
-    }
 
     await updateDeal(env, activeDealId, fields)
 

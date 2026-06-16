@@ -1,25 +1,34 @@
 export function parseContactInfo(text) {
   const message = text || ""
 
-  const phoneMatch = message.replace(/\s/g, "").match(/0[689]\d{8}/)
+  const phoneMatch = message.match(/0[689](?:\s*\d){8}/)
 
-  const phone = phoneMatch ? phoneMatch[0] : ""
+  const rawPhone = phoneMatch ? phoneMatch[0] : ""
+  const phone = rawPhone.replace(/\s/g, "")
 
   const lines = message
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
 
-  const name = lines.length > 0 ? lines[0] : ""
+  let name = ""
 
-  let address = text
+  if (lines.length > 0) {
+    const firstLine = lines[0]
+    const phoneIndex = rawPhone ? firstLine.indexOf(rawPhone) : -1
+
+    name =
+      phoneIndex > 0 ? firstLine.slice(0, phoneIndex).trim() : firstLine.trim()
+  }
+
+  let address = message
 
   if (name) {
     address = address.replace(name, "")
   }
 
-  if (phone) {
-    address = address.replace(phone, "")
+  if (rawPhone) {
+    address = address.replace(rawPhone, "")
   }
 
   address = address.replace(/\s+/g, " ").trim()

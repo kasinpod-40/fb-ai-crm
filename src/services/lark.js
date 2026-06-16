@@ -12,7 +12,13 @@ export async function getTenantAccessToken(env) {
     })
   })
 
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
+
+  if (!res.ok || data.code !== 0 || !data.tenant_access_token) {
+    throw new Error(
+      `LARK TOKEN ERROR: ${data.msg || data.message || res.status}`
+    )
+  }
 
   return data.tenant_access_token
 }

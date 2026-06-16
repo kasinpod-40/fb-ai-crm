@@ -47,6 +47,7 @@ function buildContactFields(
   pageId,
   pageName,
   salesTeam,
+  salesOwner,
   message,
   ai,
   currentMessageCount
@@ -59,6 +60,7 @@ function buildContactFields(
     page_id: pageId,
     page_name: pageName,
     sales_team: salesTeam,
+    sales_owner: salesOwner || "Unassigned",
 
     current_stage: mapStage(ai),
     lead_score: calculateLeadScore(ai),
@@ -133,6 +135,7 @@ export async function syncContact(
   pageId,
   pageName,
   salesTeam,
+  defaultSalesOwner,
   message,
   ai
 ) {
@@ -142,12 +145,15 @@ export async function syncContact(
   const contact = await findContactBySenderId(env, senderId)
 
   const currentMessageCount = Number(contact?.fields?.message_count || 0)
+  const salesOwner =
+    contact?.fields?.sales_owner || defaultSalesOwner || "Unassigned"
 
   const fields = buildContactFields(
     senderId,
     pageId,
     pageName,
     salesTeam,
+    salesOwner,
     message,
     ai,
     currentMessageCount

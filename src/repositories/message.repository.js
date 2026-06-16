@@ -37,7 +37,35 @@ export async function saveMessageRecord(env, fields) {
   return data
 }
 
-export async function findMessageById(env, messageId) {
+export async function updateMessageRecord(env, recordId, fields) {
+  const token = await getTenantAccessToken(env)
+
+  const res = await fetch(
+    `${ENDPOINTS.LARK_RECORD(env.LARK_APP_TOKEN, env.LARK_TABLE_ID)}/${recordId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        fields
+      })
+    }
+  )
+
+  const data = await res.json()
+
+  console.log("MESSAGE UPDATE RESPONSE:", JSON.stringify(data))
+
+  if (data.code !== 0) {
+    throw new Error(`LARK MESSAGE UPDATE ERROR: ${data.msg}`)
+  }
+
+  return data
+}
+
+export async function findMessageRecordById(env, messageId) {
   const token = await getTenantAccessToken(env)
 
   const filter = encodeURIComponent(`CurrentValue.[message_id]="${messageId}"`)
@@ -57,5 +85,11 @@ export async function findMessageById(env, messageId) {
 
   const data = await res.json()
 
-  return data?.data?.items?.length > 0
+  return data?.data?.items?.[0] || null
+}
+
+export async function findMessageById(env, messageId) {
+  const message = await findMessageRecordById(env, messageId)
+
+  return Boolean(message)
 }
