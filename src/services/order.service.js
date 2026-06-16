@@ -41,6 +41,10 @@ function getTaxInvoiceUrl(env, orderRecordId) {
   return `${env.PUBLIC_BASE_URL}/tax-invoice/${orderRecordId}`
 }
 
+function hasAddress(contact) {
+  return Boolean(String(contact?.fields?.delivery_address || "").trim())
+}
+
 function buildOrderFields(contact, nowIso, nowText) {
   return {
     order_id: crypto.randomUUID(),
@@ -106,6 +110,59 @@ function buildOrderFields(contact, nowIso, nowText) {
   }
 }
 
+function buildOrderUpdateFieldsFromContact(contact, nowIso, nowText) {
+  const fields = {
+    updated_at: nowIso,
+    updated_at_text: nowText
+  }
+
+  if (contact.fields.delivery_name) {
+    fields.customer_name = contact.fields.delivery_name
+  }
+
+  if (contact.fields.delivery_phone) {
+    fields.phone = contact.fields.delivery_phone
+  }
+
+  if (contact.fields.delivery_address) {
+    fields.address = contact.fields.delivery_address
+  }
+
+  if (contact.fields.product_name) {
+    fields.product_name = contact.fields.product_name
+  }
+
+  if (contact.fields.product_qty) {
+    fields.product_qty = toNumber(contact.fields.product_qty)
+  }
+
+  if (contact.fields.product_unit) {
+    fields.product_unit = contact.fields.product_unit
+  }
+
+  if (contact.fields.active_deal_id) {
+    fields.deal_record_id = contact.fields.active_deal_id
+  }
+
+  if (contact.fields.sales_owner) {
+    fields.sales_owner = contact.fields.sales_owner
+  }
+
+  if (contact.fields.page_id) {
+    fields.page_id = contact.fields.page_id
+  }
+
+  if (contact.fields.page_name) {
+    fields.page_name = contact.fields.page_name
+  }
+
+  if (contact.fields.sales_team) {
+    fields.sales_team = contact.fields.sales_team
+  }
+
+  return fields
+}
+
 async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
   const invoiceUrl = getInvoiceUrl(env, orderRecordId)
   const quotationUrl = getQuotationUrl(env, orderRecordId)
@@ -138,7 +195,19 @@ export async function createOrderFromContact(env, contact) {
   const activeOrderId = contact.fields.active_order_id
 
   if (activeOrderId) {
-    console.log("ACTIVE ORDER EXISTS")
+    console.log("ACTIVE ORDER EXISTS - UPDATE ORDER FROM CONTACT")
+
+    const nowIso = getNowIso()
+    const nowText = getNowText()
+
+    await updateOrder(
+      env,
+      activeOrderId,
+      buildOrderUpdateFieldsFromContact(contact, nowIso, nowText)
+    )
+
+    console.log("ACTIVE ORDER UPDATED FROM CONTACT")
+
     return activeOrderId
   }
 
@@ -153,6 +222,8 @@ export async function createOrderFromContact(env, contact) {
   const orderRecordId = result.record.record_id
 
   await updateActiveOrder(env, contact.record_id, orderRecordId)
+
+  contact.fields.active_order_id = orderRecordId
 
   await saveDocumentUrls(env, orderRecordId, nowIso, nowText)
 
