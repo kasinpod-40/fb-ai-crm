@@ -9,7 +9,11 @@ import { mapStage, calculateLeadScore } from "../models/lead.model"
 
 import { parseContactInfo } from "./contact-parser"
 
-import { cancelActiveOrder, updateProductFromImage } from "./order.service"
+import {
+  cancelActiveOrder,
+  createOrderFromContact,
+  updateProductFromImage
+} from "./order.service"
 
 import { applySlipToActiveOrder, savePendingPayment } from "./payment.service"
 
@@ -30,9 +34,7 @@ function isProductImage(ai) {
 }
 
 function shouldCreateDeal(ai) {
-  if (!ai) {
-    return false
-  }
+  if (!ai) return false
 
   const blockedIntents = [
     "greeting",
@@ -40,7 +42,9 @@ function shouldCreateDeal(ai) {
     "unknown",
     "support",
     "image_received",
-    "small_talk"
+    "small_talk",
+    "ask_price",
+    "delivery_question"
   ]
 
   if (blockedIntents.includes(ai.intent)) {
@@ -51,41 +55,55 @@ function shouldCreateDeal(ai) {
     return false
   }
 
-  if (ai.intent === "product_info") {
-    const hasProductName =
-      Boolean(ai.product_name) || Boolean(ai.image_ai?.product_name)
-
-    const hasProductQty = Boolean(ai.product_qty)
-    const hasProductUnit = Boolean(ai.product_unit)
-    const hasProductImage = isProductImage(ai)
-
-    if (
-      !hasProductName &&
-      !hasProductQty &&
-      !hasProductUnit &&
-      !hasProductImage
-    ) {
-      return false
-    }
+  if (isPaymentSlip(ai)) {
+    return true
   }
 
-  return ["interested", "negotiating", "closing"].includes(ai.customer_stage)
+  if (ai.intent === "payment_request") {
+    return true
+  }
+
+  if (ai.intent === "delivery_address") {
+    return true
+  }
+
+  if (ai.intent === "closed_sale") {
+    return true
+  }
+
+  if (ai.intent === "ask_discount") {
+    return true
+  }
+
+  if (ai.intent === "product_info") {
+    const hasProductImage = isProductImage(ai)
+    const hasProductQty = Number(ai.product_qty || 0) > 0
+    const hasProductUnit = Boolean(ai.product_unit)
+    const isStrongBuyingSignal =
+      ai.hot_lead === true || ai.interest_level === "high"
+
+    if (hasProductImage) return true
+    if (hasProductQty && hasProductUnit) return true
+    if (isStrongBuyingSignal) return true
+
+    return false
+  }
+
+  return ["negotiating", "closing"].includes(ai.customer_stage)
 }
 
 function toNumber(value) {
-  if (value === null || value === undefined || value === "") {
-    return 0
-  }
+  if (value === null || value === undefined || value === "") return 0
 
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0
   }
 
-  const cleaned = String(value)
-    .replace(/,/g, "")
-    .replace(/[^\d.]/g, "")
-
-  const parsed = Number(cleaned)
+  const parsed = Number(
+    String(value)
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "")
+  )
 
   return Number.isFinite(parsed) ? parsed : 0
 }
@@ -152,9 +170,33 @@ async function handleProductImage(env, contact, ai) {
   }
 }
 
+async function ensureActiveOrderForSlip(env, contact) {
+  if (contact.fields.active_order_id) {
+    return contact.fields.active_order_id
+  }
+
+  const orderRecordId = await createOrderFromContact(env, contact)
+
+  if (orderRecordId) {
+    contact.fields.active_order_id = orderRecordId
+  }
+
+  return orderRecordId
+}
+
 async function handlePaymentSlip(env, contact, ai) {
   if (!isPaymentSlip(ai)) {
     return false
+  }
+
+  const orderRecordId = await ensureActiveOrderForSlip(env, contact)
+
+  if (!orderRecordId) {
+    await savePendingPayment(env, contact, ai.image_ai)
+
+    console.log("PAYMENT SLIP SAVED AS PENDING")
+
+    return true
   }
 
   const paymentAttached = await applySlipToActiveOrder(
@@ -339,5 +381,24 @@ export async function syncDeal(env, contact, ai) {
 
   await updateActiveDeal(env, contact.record_id, recordId)
 
+  contact.fields.active_deal_id = recordId
+
   console.log("DEAL CREATED")
+
+  if (isPaymentSlip(ai)) {
+    const paymentHandled = await handlePaymentSlip(env, contact, ai)
+
+    if (paymentHandled) {
+      await updateDeal(env, recordId, {
+        stage: "Closing",
+        status: "Open",
+        ai_summary:
+          "ลูกค้าส่งสลิปแล้ว ระบบสร้าง Deal และ Order ให้แล้ว รอ Sales ตรวจสอบยอดชำระเงิน",
+        updated_at: nowIso,
+        updated_at_text: nowText
+      })
+
+      console.log("DEAL CREATED FROM PAYMENT SLIP")
+    }
+  }
 }

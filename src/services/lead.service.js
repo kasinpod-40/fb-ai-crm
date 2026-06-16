@@ -22,17 +22,14 @@ function buildImageAIResult(imageAI, imageUrl) {
   if (imageAI.image_type === "payment_slip") {
     return {
       intent: "closed_sale",
-
       interest_level: "high",
-
       customer_stage: "closing",
-
       hot_lead: true,
-
       closed_sale: false,
-
+      product_name: "",
+      product_qty: 0,
+      product_unit: "",
       summary: imageAI.summary || "ลูกค้าส่งสลิป",
-
       image_ai: {
         ...imageAI,
         image_url: imageUrl
@@ -43,23 +40,14 @@ function buildImageAIResult(imageAI, imageUrl) {
   if (imageAI.image_type === "product_image") {
     return {
       intent: "product_info",
-
       interest_level: "medium",
-
       customer_stage: "interested",
-
       hot_lead: false,
-
       closed_sale: false,
-
       product_name: imageAI.product_name || "",
-
       product_qty: 0,
-
       product_unit: "",
-
       summary: imageAI.summary || "ลูกค้าส่งรูปสินค้า",
-
       image_ai: {
         ...imageAI,
         image_url: imageUrl
@@ -69,23 +57,14 @@ function buildImageAIResult(imageAI, imageUrl) {
 
   return {
     intent: "image_received",
-
     interest_level: "low",
-
     customer_stage: "new_lead",
-
     hot_lead: false,
-
     closed_sale: false,
-
     product_name: "",
-
     product_qty: 0,
-
     product_unit: "",
-
     summary: "ลูกค้าส่งรูปภาพทั่วไป",
-
     image_ai: {
       ...imageAI,
       image_type: imageAI.image_type || "other",
@@ -98,23 +77,14 @@ function buildImageAIResult(imageAI, imageUrl) {
 function buildImageFallbackResult(imageUrl) {
   return {
     intent: "image_received",
-
     interest_level: "low",
-
     customer_stage: "new_lead",
-
     hot_lead: false,
-
     closed_sale: false,
-
     product_name: "",
-
     product_qty: 0,
-
     product_unit: "",
-
     summary: "ลูกค้าส่งรูปภาพ แต่ระบบยังวิเคราะห์รูปไม่ได้",
-
     image_ai: {
       image_type: "unknown",
       product_name: "",
@@ -231,11 +201,6 @@ export async function processLead(
 
   if (reviewReason) {
     await notifyAiReviewRequired(env, contact, ai, reviewReason)
-  }
-
-  if (contact.fields.payment_completed_from_pending) {
-    console.log("SKIP SYNC DEAL: PAYMENT COMPLETED FROM PENDING")
-    return
   }
 
   await syncDeal(env, contact, ai)

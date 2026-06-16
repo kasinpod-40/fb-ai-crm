@@ -23,25 +23,21 @@ function generateOrderNumber() {
 
 function getInvoiceUrl(env, orderRecordId) {
   if (!env.PUBLIC_BASE_URL) return ""
-
   return `${env.PUBLIC_BASE_URL}/invoice/${orderRecordId}`
 }
 
 function getQuotationUrl(env, orderRecordId) {
   if (!env.PUBLIC_BASE_URL) return ""
-
   return `${env.PUBLIC_BASE_URL}/quotation/${orderRecordId}`
 }
 
 function getTaxFormUrl(env, orderRecordId) {
   if (!env.PUBLIC_BASE_URL) return ""
-
   return `${env.PUBLIC_BASE_URL}/tax-form/${orderRecordId}`
 }
 
 function getTaxInvoiceUrl(env, orderRecordId) {
   if (!env.PUBLIC_BASE_URL) return ""
-
   return `${env.PUBLIC_BASE_URL}/tax-invoice/${orderRecordId}`
 }
 
@@ -54,79 +50,58 @@ function buildOrderFields(contact, nowIso, nowText) {
     sender_id: contact.fields.sender_id,
 
     page_id: contact.fields.page_id || "",
-
     page_name: contact.fields.page_name || "",
-
     sales_team: contact.fields.sales_team || "",
 
     deal_record_id: contact.fields.active_deal_id || "",
 
     customer_name: contact.fields.delivery_name || "",
-
     phone: contact.fields.delivery_phone || "",
-
     address: contact.fields.delivery_address || "",
 
     product_name: contact.fields.product_name || "",
+    product_qty: toNumber(contact.fields.product_qty),
+    product_unit: contact.fields.product_unit || "",
 
-    order_status: "New",
-
+    order_status: "Waiting Payment",
     payment_status: "Pending",
-
     payment_verified: false,
 
     total_amount: 0,
 
     invoice_number: generateInvoiceNumber(),
-
     quotation_number: generateQuotationNumber(),
 
     tracking_number: "",
 
     created_at: nowIso,
-
     created_at_text: nowText,
 
     updated_at: nowIso,
-
     updated_at_text: nowText,
 
     paid_at: null,
-
     paid_at_text: "",
 
     invoice_url: "",
-
     quotation_url: "",
-
     invoice_pdf_url: "",
-
     quotation_pdf_url: "",
 
     tax_form_url: "",
-
     tax_invoice_url: "",
-
     tax_invoice_number: "",
-
     tax_invoice_status: "Not Requested",
 
     need_tax_invoice: false,
 
     tax_name: "",
-
     tax_address: "",
-
     tax_id: "",
 
     sales_owner: contact.fields.sales_owner || "Unassigned",
 
-    product_qty: toNumber(contact.fields.product_qty),
-
-    product_unit: contact.fields.product_unit || "",
-
     is_overdue: false,
-
     overdue_alert_sent: false
   }
 }
@@ -142,21 +117,10 @@ async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
     updated_at_text: nowText
   }
 
-  if (invoiceUrl) {
-    fields.invoice_url = invoiceUrl
-  }
-
-  if (quotationUrl) {
-    fields.quotation_url = quotationUrl
-  }
-
-  if (taxFormUrl) {
-    fields.tax_form_url = taxFormUrl
-  }
-
-  if (taxInvoiceUrl) {
-    fields.tax_invoice_url = taxInvoiceUrl
-  }
+  if (invoiceUrl) fields.invoice_url = invoiceUrl
+  if (quotationUrl) fields.quotation_url = quotationUrl
+  if (taxFormUrl) fields.tax_form_url = taxFormUrl
+  if (taxInvoiceUrl) fields.tax_invoice_url = taxInvoiceUrl
 
   if (!invoiceUrl && !quotationUrl && !taxFormUrl && !taxInvoiceUrl) {
     console.log("PUBLIC_BASE_URL NOT SET, SKIP DOCUMENT URL")
@@ -165,18 +129,13 @@ async function saveDocumentUrls(env, orderRecordId, nowIso, nowText) {
 
   await updateOrder(env, orderRecordId, fields)
 
-  console.log("INVOICE URL SAVED:", invoiceUrl)
-  console.log("QUOTATION URL SAVED:", quotationUrl)
-  console.log("TAX FORM URL SAVED:", taxFormUrl)
-  console.log("TAX INVOICE URL SAVED:", taxInvoiceUrl)
+  console.log("DOCUMENT URLS SAVED")
 }
 
 export async function createOrderFromContact(env, contact) {
   console.log("CREATE ORDER FROM CONTACT START")
 
   const activeOrderId = contact.fields.active_order_id
-
-  console.log("ACTIVE ORDER:", activeOrderId)
 
   if (activeOrderId) {
     console.log("ACTIVE ORDER EXISTS")
@@ -193,15 +152,11 @@ export async function createOrderFromContact(env, contact) {
 
   const orderRecordId = result.record.record_id
 
-  console.log("ORDER RECORD ID:", orderRecordId)
-
   await updateActiveOrder(env, contact.record_id, orderRecordId)
-
-  console.log("ACTIVE ORDER SAVED TO CONTACT")
 
   await saveDocumentUrls(env, orderRecordId, nowIso, nowText)
 
-  console.log("ORDER CREATED")
+  console.log("ORDER CREATED:", orderRecordId)
 
   return orderRecordId
 }
@@ -215,22 +170,22 @@ export async function markOrderPaid(env, orderRecordId) {
   await updateOrder(env, orderRecordId, {
     payment_status: "Paid",
     payment_verified: false,
-    order_status: "Completed",
+    order_status: "Payment Review",
+
     paid_at: nowIso,
     paid_at_text: nowText,
+
     updated_at: nowIso,
     updated_at_text: nowText
   })
 
-  console.log("ORDER PAID")
+  console.log("ORDER PAID - WAITING FOR VERIFICATION")
 
   return true
 }
 
 export async function markActiveOrderPaid(env, contact) {
   const orderId = contact.fields.active_order_id
-
-  console.log("ACTIVE ORDER TO PAY:", orderId)
 
   if (!orderId) {
     console.log("NO ACTIVE ORDER TO MARK PAID")
@@ -255,6 +210,7 @@ export async function cancelActiveOrder(env, contact) {
 
   await updateOrder(env, orderId, {
     order_status: "Cancelled",
+
     updated_at: nowIso,
     updated_at_text: nowText
   })
@@ -265,9 +221,6 @@ export async function cancelActiveOrder(env, contact) {
 }
 
 export async function updateProductFromImage(env, contact, productName) {
-  const nowIso = getNowIso()
-  const nowText = getNowText()
-
   if (!productName) {
     return false
   }
@@ -279,8 +232,12 @@ export async function updateProductFromImage(env, contact, productName) {
     return false
   }
 
+  const nowIso = getNowIso()
+  const nowText = getNowText()
+
   await updateOrder(env, orderId, {
     product_name: productName,
+
     updated_at: nowIso,
     updated_at_text: nowText
   })
@@ -291,19 +248,17 @@ export async function updateProductFromImage(env, contact, productName) {
 }
 
 function toNumber(value) {
-  if (value === null || value === undefined || value === "") {
-    return 0
-  }
+  if (value === null || value === undefined || value === "") return 0
 
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0
   }
 
-  const cleaned = String(value)
-    .replace(/,/g, "")
-    .replace(/[^\d.]/g, "")
-
-  const parsed = Number(cleaned)
+  const parsed = Number(
+    String(value)
+      .replace(/,/g, "")
+      .replace(/[^\d.]/g, "")
+  )
 
   return Number.isFinite(parsed) ? parsed : 0
 }

@@ -66,6 +66,8 @@ export async function notifyPaymentReceived(env, contact, imageAI = {}) {
     `💵 Amount: ${imageAI.slip_amount || 0}`,
     `🏦 Bank: ${imageAI.slip_bank || "-"}`,
     `🕒 Time: ${imageAI.slip_time || "-"}`,
+    `🧾 Status: Payment Review`,
+    `➡️ Action: รอ Sales ตรวจสอบยอดชำระเงินและติ๊ก payment_verified`,
     `📝 Summary: ${imageAI.summary || fields.ai_summary || "-"}`
   ])
 }
@@ -77,19 +79,15 @@ export async function notifyPaymentSlipNoActiveOrder(
 ) {
   const fields = contact?.fields || {}
 
-  await sendLarkNotification(
-    env,
-    "⚠️ Payment Slip Received But No Active Order",
-    [
-      `👤 Customer: ${fields.sender_id || "-"}`,
-      `📄 Page: ${fields.page_id || "-"}`,
-      `💵 Amount: ${imageAI.slip_amount || 0}`,
-      `🏦 Bank: ${imageAI.slip_bank || "-"}`,
-      `🕒 Time: ${imageAI.slip_time || "-"}`,
-      `🧾 Status: เก็บสลิปไว้ใน Contact แล้ว`,
-      `➡️ Action: รอลูกค้าส่งที่อยู่ แล้วระบบจะสร้าง Order และปิด Paid อัตโนมัติ`
-    ]
-  )
+  await sendLarkNotification(env, "💰 Payment Slip Received", [
+    `👤 Customer: ${fields.sender_id || "-"}`,
+    `📄 Page: ${fields.page_id || "-"}`,
+    `💵 Amount: ${imageAI.slip_amount || 0}`,
+    `🏦 Bank: ${imageAI.slip_bank || "-"}`,
+    `🕒 Time: ${imageAI.slip_time || "-"}`,
+    `🧾 Status: ลูกค้าส่งสลิปแล้ว`,
+    `➡️ Action: ระบบจะสร้าง Deal และ Order อัตโนมัติ พร้อมรอ Sales ตรวจสอบการชำระเงิน`
+  ])
 }
 
 export async function notifyAiReviewRequired(env, contact, ai, reason) {
