@@ -35,7 +35,8 @@ function buildPendingSlipFields(imageAI) {
     pending_slip_amount: toNumber(imageAI.slip_amount),
     pending_slip_bank: imageAI.slip_bank || "",
     pending_slip_time: imageAI.slip_time || "",
-    pending_slip_image_url: imageAI.image_url || ""
+    pending_slip_image_url: imageAI.image_url || "",
+    pending_slip_summary: imageAI.summary || ""
   }
 }
 
@@ -79,7 +80,9 @@ function buildPendingImageAI(contact) {
     slip_bank: contact.fields.pending_slip_bank || "",
     slip_time: contact.fields.pending_slip_time || "",
     image_url: contact.fields.pending_slip_image_url || "",
-    summary: "ระบบแนบสลิปเข้ากับ Order แล้ว รอ Sales ตรวจสอบยอด"
+    summary:
+      contact.fields.pending_slip_summary ||
+      "ระบบแนบสลิปเข้ากับ Order แล้ว รอ Sales ตรวจสอบยอด"
   }
 }
 
@@ -89,7 +92,8 @@ async function clearPendingPayment(env, contact) {
     pending_slip_amount: 0,
     pending_slip_bank: "",
     pending_slip_time: "",
-    pending_slip_image_url: ""
+    pending_slip_image_url: "",
+    pending_slip_summary: ""
   })
 
   contact.fields.pending_payment = false
@@ -97,6 +101,7 @@ async function clearPendingPayment(env, contact) {
   contact.fields.pending_slip_bank = ""
   contact.fields.pending_slip_time = ""
   contact.fields.pending_slip_image_url = ""
+  contact.fields.pending_slip_summary = ""
 
   console.log("PENDING PAYMENT CLEARED")
 }
@@ -109,6 +114,7 @@ export async function savePendingPayment(env, contact, imageAI) {
   contact.fields.pending_slip_bank = imageAI.slip_bank || ""
   contact.fields.pending_slip_time = imageAI.slip_time || ""
   contact.fields.pending_slip_image_url = imageAI.image_url || ""
+  contact.fields.pending_slip_summary = imageAI.summary || ""
 
   await notifyPaymentSlipNoActiveOrder(env, contact, imageAI)
 
@@ -174,6 +180,10 @@ export async function applyPendingPaymentToOrder(env, contact, orderRecordId) {
 }
 
 export async function closeDealAfterPayment(env, contact, dealRecordId) {
+  console.log(
+    "closeDealAfterPayment is deprecated. Use Lark Automation instead."
+  )
+
   if (!dealRecordId) {
     console.log("NO DEAL TO CLOSE AFTER PAYMENT")
     return
@@ -197,6 +207,11 @@ export async function closeDealAfterPayment(env, contact, dealRecordId) {
     current_stage: "Won",
     hot_lead: false,
     pending_payment: false,
+    pending_slip_amount: 0,
+    pending_slip_bank: "",
+    pending_slip_time: "",
+    pending_slip_image_url: "",
+    pending_slip_summary: "",
     ai_summary: "Sales ยืนยันการชำระเงินแล้ว ระบบปิดการขายสำเร็จ"
   })
 

@@ -50,17 +50,11 @@ function shouldCreateDeal(ai) {
   ]
 
   if (blockedIntents.includes(ai.intent)) return false
-
   if (ai.image_ai?.image_type === "other") return false
-
   if (isPaymentSlip(ai)) return true
-
   if (ai.intent === "payment_request") return true
-
   if (ai.intent === "delivery_address") return true
-
   if (ai.intent === "closed_sale") return true
-
   if (ai.intent === "ask_discount") return true
 
   if (ai.intent === "product_info") {
@@ -111,17 +105,9 @@ function buildDealUpdateFields(contact, ai, nowIso, nowText) {
     updated_at_text: nowText
   }
 
-  if (productName) {
-    fields.product_name = productName
-  }
-
-  if (ai.product_qty) {
-    fields.product_qty = toNumber(ai.product_qty)
-  }
-
-  if (ai.product_unit) {
-    fields.product_unit = ai.product_unit
-  }
+  if (productName) fields.product_name = productName
+  if (ai.product_qty) fields.product_qty = toNumber(ai.product_qty)
+  if (ai.product_unit) fields.product_unit = ai.product_unit
 
   if (ai.intent === "delivery_address") {
     const contactInfo = parseContactInfo(contact.fields.last_message)
@@ -144,6 +130,9 @@ async function closeDealAsLost(env, contact, fields, nowIso, nowText) {
 
   await updateActiveDeal(env, contact.record_id, "")
   await updateActiveOrder(env, contact.record_id, "")
+
+  contact.fields.active_deal_id = ""
+  contact.fields.active_order_id = ""
 
   console.log("DEAL CLOSED AS LOST")
   console.log("ACTIVE DEAL CLEARED")
@@ -298,13 +287,8 @@ function buildNewDealFields(contact, ai, nowIso, nowText) {
       : {})
   }
 
-  if (ai.product_qty) {
-    fields.product_qty = toNumber(ai.product_qty)
-  }
-
-  if (ai.product_unit) {
-    fields.product_unit = ai.product_unit
-  }
+  if (ai.product_qty) fields.product_qty = toNumber(ai.product_qty)
+  if (ai.product_unit) fields.product_unit = ai.product_unit
 
   return fields
 }
@@ -354,6 +338,12 @@ export async function syncDeal(env, contact, ai) {
 
     if (ai.customer_stage === "lost") {
       await closeDealAsLost(env, contact, fields, nowIso, nowText)
+
+      await updateDeal(env, activeDealId, fields)
+
+      console.log("DEAL UPDATED AS LOST")
+
+      return
     }
 
     await updateDeal(env, activeDealId, fields)
