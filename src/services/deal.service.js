@@ -5,6 +5,8 @@ import {
   updateActiveOrder
 } from "../repositories/contact.repository"
 
+import { updateOrder } from "../repositories/order.repository"
+
 import { mapStage, calculateLeadScore } from "../models/lead.model"
 
 import { parseContactInfo } from "./contact-parser"
@@ -47,33 +49,19 @@ function shouldCreateDeal(ai) {
     "delivery_question"
   ]
 
-  if (blockedIntents.includes(ai.intent)) {
-    return false
-  }
+  if (blockedIntents.includes(ai.intent)) return false
 
-  if (ai.image_ai?.image_type === "other") {
-    return false
-  }
+  if (ai.image_ai?.image_type === "other") return false
 
-  if (isPaymentSlip(ai)) {
-    return true
-  }
+  if (isPaymentSlip(ai)) return true
 
-  if (ai.intent === "payment_request") {
-    return true
-  }
+  if (ai.intent === "payment_request") return true
 
-  if (ai.intent === "delivery_address") {
-    return true
-  }
+  if (ai.intent === "delivery_address") return true
 
-  if (ai.intent === "closed_sale") {
-    return true
-  }
+  if (ai.intent === "closed_sale") return true
 
-  if (ai.intent === "ask_discount") {
-    return true
-  }
+  if (ai.intent === "ask_discount") return true
 
   if (ai.intent === "product_info") {
     const hasProductImage = isProductImage(ai)
@@ -182,6 +170,26 @@ async function ensureActiveOrderForSlip(env, contact) {
   }
 
   return orderRecordId
+}
+
+async function linkActiveOrderToDeal(
+  env,
+  contact,
+  dealRecordId,
+  nowIso,
+  nowText
+) {
+  if (!contact.fields.active_order_id || !dealRecordId) {
+    return
+  }
+
+  await updateOrder(env, contact.fields.active_order_id, {
+    deal_record_id: dealRecordId,
+    updated_at: nowIso,
+    updated_at_text: nowText
+  })
+
+  console.log("ACTIVE ORDER LINKED TO DEAL:", dealRecordId)
 }
 
 async function handlePaymentSlip(env, contact, ai) {
@@ -330,6 +338,8 @@ export async function syncDeal(env, contact, ai) {
 
       await updateDeal(env, activeDealId, fields)
 
+      await linkActiveOrderToDeal(env, contact, activeDealId, nowIso, nowText)
+
       console.log("DEAL UPDATED AFTER PAYMENT SLIP")
 
       return
@@ -347,6 +357,8 @@ export async function syncDeal(env, contact, ai) {
     }
 
     await updateDeal(env, activeDealId, fields)
+
+    await linkActiveOrderToDeal(env, contact, activeDealId, nowIso, nowText)
 
     if (claimedPaymentHandled) {
       console.log("DEAL KEPT OPEN AFTER TEXT PAYMENT CLAIM")
@@ -383,6 +395,8 @@ export async function syncDeal(env, contact, ai) {
 
   contact.fields.active_deal_id = recordId
 
+  await linkActiveOrderToDeal(env, contact, recordId, nowIso, nowText)
+
   console.log("DEAL CREATED")
 
   if (isPaymentSlip(ai)) {
@@ -397,6 +411,8 @@ export async function syncDeal(env, contact, ai) {
         updated_at: nowIso,
         updated_at_text: nowText
       })
+
+      await linkActiveOrderToDeal(env, contact, recordId, nowIso, nowText)
 
       console.log("DEAL CREATED FROM PAYMENT SLIP")
     }

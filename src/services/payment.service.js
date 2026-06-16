@@ -126,7 +126,11 @@ export async function applySlipToActiveOrder(env, contact, imageAI) {
   const nowIso = getNowIso()
   const nowText = getNowText()
 
-  await updateOrder(env, orderId, buildPaymentFieldsFromImageAI(imageAI, nowIso, nowText))
+  await updateOrder(
+    env,
+    orderId,
+    buildPaymentFieldsFromImageAI(imageAI, nowIso, nowText)
+  )
 
   await notifyPaymentReceived(env, contact, {
     ...imageAI,
@@ -191,7 +195,8 @@ export async function closeDealAfterPayment(env, contact, dealRecordId) {
     active_deal_id: "",
     active_order_id: "",
     current_stage: "Won",
-    hot_lead: true,
+    hot_lead: false,
+    pending_payment: false,
     ai_summary: "Sales ยืนยันการชำระเงินแล้ว ระบบปิดการขายสำเร็จ"
   })
 
